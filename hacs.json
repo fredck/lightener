@@ -1,4 +1,8 @@
 {
-    "name": "Lightener",
-    "render_readme": true
+    "name": "Integration blueprint",
+    "filename": "integration_blueprint.zip",
+    "hide_default_branch": true,
+    "render_readme": true,
+    "homeassistant": "2022.2.0",
+    "zip_release": true
 }
