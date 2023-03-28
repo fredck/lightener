@@ -34,29 +34,29 @@ from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import (
     async_track_state_change,
-    async_track_state_change_event,
 )
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-from homeassistant.loader import bind_hass
-
 
 _LOGGER = logging.getLogger(__name__)
 
-ENTITY_SCHEMA = vol.All({vol.Clamp(min=1, max=50): vol.Clamp(min=0, max=70)})
-
-LIGHT_SCHEMA = vol.All(
-    vol.Schema(
-        {
-            vol.Required("entities"): {cv.entity_id: ENTITY_SCHEMA},
-            vol.Optional(CONF_FRIENDLY_NAME): cv.string,
-        }
-    ),
+ENTITY_SCHEMA = vol.All(
+    vol.DefaultTo({1: 1, 100: 100}),
+    {
+        vol.All(vol.Coerce(int), vol.Range(min=1, max=100)): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=100)
+        )
+    },
 )
 
-PLATFORM_SCHEMA = vol.All(
-    PLATFORM_SCHEMA.extend(
-        {vol.Required(CONF_LIGHTS): cv.schema_with_slug_keys(LIGHT_SCHEMA)}
-    ),
+LIGHT_SCHEMA = vol.Schema(
+    {
+        vol.Required("entities"): {cv.entity_id: ENTITY_SCHEMA},
+        vol.Optional(CONF_FRIENDLY_NAME): cv.string,
+    }
+)
+
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+    {vol.Required(CONF_LIGHTS): cv.schema_with_slug_keys(LIGHT_SCHEMA)}
 )
 
 
