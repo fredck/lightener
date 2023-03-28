@@ -17,24 +17,20 @@ from homeassistant.components.light import (
 )
 from homeassistant.const import (
     ATTR_ENTITY_ID,
-    CONF_ENTITY_ID,
+    CONF_ENTITIES,
     CONF_FRIENDLY_NAME,
     CONF_LIGHTS,
-    CONF_NAME,
-    CONF_UNIQUE_ID,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
+    STATE_OFF,
+    STATE_ON,
 )
 from homeassistant.core import HomeAssistant, State
-
-# Import the device class from the component that you want to support
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import (
-    async_track_state_change,
-)
+from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,7 +46,7 @@ ENTITY_SCHEMA = vol.All(
 
 LIGHT_SCHEMA = vol.Schema(
     {
-        vol.Required("entities"): {cv.entity_id: ENTITY_SCHEMA},
+        vol.Required(CONF_ENTITIES): {cv.entity_id: ENTITY_SCHEMA},
         vol.Optional(CONF_FRIENDLY_NAME): cv.string,
     }
 )
@@ -102,14 +98,14 @@ class LightenerLight(LightEntity):
         # Define the display name of the light.
         self._name = config.get(CONF_FRIENDLY_NAME)
 
-        self._state = "off"
+        self._state = STATE_OFF
         self._brightness = 255
 
         ## Add all entities that are managed by this lightened.
 
         entities = []
 
-        for entity_id, entity_config in config["entities"].items():
+        for entity_id, entity_config in config[CONF_ENTITIES].items():
             entities.append(LightenerLightEntity(hass, entity_id, entity_config))
 
         self._entities = entities
@@ -146,7 +142,7 @@ class LightenerLight(LightEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if light is on."""
-        return None if self._state is None else self._state == "on"
+        return None if self._state is None else self._state == STATE_ON
 
     @property
     def brightness(self) -> int | None:
@@ -155,14 +151,14 @@ class LightenerLight(LightEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the lights on."""
 
-        self._state = "on"
-        self._brightness = dict(kwargs).get("brightness") or self._brightness
+        self._state = STATE_ON
+        self._brightness = dict(kwargs).get(ATTR_BRIGHTNESS) or self._brightness
         self.async_schedule_update_ha_state(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the lights off."""
 
-        self._state = "off"
+        self._state = STATE_OFF
         self.async_schedule_update_ha_state()
 
     async def async_added_to_hass(self) -> None:
@@ -170,9 +166,9 @@ class LightenerLight(LightEntity):
 
     async def _async_state_change(self, entity_id, old_state, new_state: State) -> None:
         # Update brightness with the event value.
-        self._brightness = new_state.attributes.get("brightness") or self._brightness
+        self._brightness = new_state.attributes.get(ATTR_BRIGHTNESS) or self._brightness
 
-        if new_state.state == "on":
+        if new_state.state == STATE_ON:
             for entity in self._entities:
                 await entity.async_turn_on(self._brightness)
 
@@ -221,7 +217,7 @@ class LightenerLightEntity:
 
         state = self._hass.states.get(self._id).as_dict()
 
-        brightness = state.get("attributes").get("brightness") or 0
+        brightness = state.get("attributes").get(ATTR_BRIGHTNESS) or 0
 
         return 100 if brightness == 255 else ceil(brightness / 255 * 99.0)
 
@@ -231,7 +227,7 @@ class LightenerLightEntity:
             self._hass.services.async_call(
                 core.DOMAIN,
                 SERVICE_TURN_ON,
-                {ATTR_ENTITY_ID: self._id, "brightness": self._levels[brightness]},
+                {ATTR_ENTITY_ID: self._id, ATTR_BRIGHTNESS: self._levels[brightness]},
                 blocking=True,
             )
         )
