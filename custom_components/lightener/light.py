@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from math import ceil
-from typing import Any
+from typing import Any, Literal
 
 import voluptuous as vol
 
@@ -25,7 +25,7 @@ from homeassistant.const import (
     STATE_OFF,
     STATE_ON,
 )
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import HomeAssistant, State, Context
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import async_generate_entity_id
@@ -54,6 +54,8 @@ LIGHT_SCHEMA = vol.Schema(
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_LIGHTS): cv.schema_with_slug_keys(LIGHT_SCHEMA)}
 )
+
+LIGHTENER_CONTEXT = "lightener_context"
 
 
 def _convert_percent_to_brightness(percent: int) -> int:
@@ -163,6 +165,10 @@ class LightenerLight(LightEntity):
 
     async def async_added_to_hass(self) -> None:
         async def _async_state_change(ev: Event) -> None:
+            # Do nothing if the change has been triggered when a child entity was changed directly.
+            if ev.context.id == LIGHTENER_CONTEXT:
+                return
+
             new_state: State = ev.data.get("new_state")
 
             # Update brightness with the event value.
@@ -179,6 +185,34 @@ class LightenerLight(LightEntity):
                     await entity.async_turn_off()
 
         async_track_state_change_event(self._hass, self.entity_id, _async_state_change)
+
+        # Track state changes of the child entities and update the lightener state accordingly.
+
+        async def _async_child_state_change(ev: Event) -> None:
+            # Do nothing if the change has been triggered by the lightener.
+            if ev.context.id == LIGHTENER_CONTEXT:
+                return
+
+            service_to_call = SERVICE_TURN_OFF
+
+            if any(entity.state == STATE_ON for entity in self._entities):
+                service_to_call = SERVICE_TURN_ON
+
+            self._hass.async_create_task(
+                self._hass.services.async_call(
+                    core.DOMAIN,
+                    service_to_call,
+                    {ATTR_ENTITY_ID: self.entity_id},
+                    blocking=True,
+                    context=Context(None, None, LIGHTENER_CONTEXT),
+                )
+            )
+
+        async_track_state_change_event(
+            self._hass,
+            map(lambda e: e.entity_id, self._entities),
+            _async_child_state_change,
+        )
 
 
 class LightenerLightEntity:
@@ -221,6 +255,14 @@ class LightenerLightEntity:
         self._levels = levels
 
     @property
+    def entity_id(self) -> str:
+        return self._id
+
+    @property
+    def state(self) -> Literal["on", "off"] | None:
+        return self._hass.states.get(self._id).state
+
+    @property
     def brightness(self) -> int | None:
         """Return the brightness of the light."""
 
@@ -238,6 +280,7 @@ class LightenerLightEntity:
                 SERVICE_TURN_ON,
                 {ATTR_ENTITY_ID: self._id, ATTR_BRIGHTNESS: self._levels[brightness]},
                 blocking=True,
+                context=Context(None, None, LIGHTENER_CONTEXT),
             )
         )
 
@@ -250,5 +293,6 @@ class LightenerLightEntity:
                 SERVICE_TURN_OFF,
                 {ATTR_ENTITY_ID: self._id},
                 blocking=True,
+                context=Context(None, None, LIGHTENER_CONTEXT),
             )
         )
