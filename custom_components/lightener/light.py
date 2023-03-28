@@ -30,7 +30,7 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers.event import async_track_state_change_event, Event
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class LightenerLight(LightEntity):
         entities = []
 
         for entity_id, entity_config in config[CONF_ENTITIES].items():
-            entities.append(LightenerLightEntity(hass, entity_id, entity_config))
+            entities.append(LightenerLightEntity(hass, self, entity_id, entity_config))
 
         self._entities = entities
 
@@ -162,29 +162,38 @@ class LightenerLight(LightEntity):
         self.async_schedule_update_ha_state()
 
     async def async_added_to_hass(self) -> None:
-        async_track_state_change(self._hass, self.entity_id, self._async_state_change)
+        async def _async_state_change(ev: Event) -> None:
+            new_state: State = ev.data.get("new_state")
 
-    async def _async_state_change(self, entity_id, old_state, new_state: State) -> None:
-        # Update brightness with the event value.
-        self._brightness = new_state.attributes.get(ATTR_BRIGHTNESS) or self._brightness
+            # Update brightness with the event value.
+            self._brightness = (
+                new_state.attributes.get(ATTR_BRIGHTNESS) or self._brightness
+            )
 
-        if new_state.state == STATE_ON:
-            for entity in self._entities:
-                await entity.async_turn_on(self._brightness)
+            if new_state.state == STATE_ON:
+                for entity in self._entities:
+                    await entity.async_turn_on(self._brightness)
 
-        else:
-            for entity in self._entities:
-                await entity.async_turn_off()
+            else:
+                for entity in self._entities:
+                    await entity.async_turn_off()
+
+        async_track_state_change_event(self._hass, self.entity_id, _async_state_change)
 
 
 class LightenerLightEntity:
     """Represents a light entity managed by a LightnerLight."""
 
     def __init__(
-        self: LightenerLightEntity, hass: HomeAssistant, entity_id: str, config: dict
+        self: LightenerLightEntity,
+        hass: HomeAssistant,
+        parent: LightenerLight,
+        entity_id: str,
+        config: dict,
     ) -> None:
         self._id = entity_id
         self._hass = hass
+        self._parent = parent
 
         config_levels = {}
 
