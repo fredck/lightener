@@ -1,7 +1,7 @@
 {
     "domain": "lightener",
     "name": "Lightener",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "codeowners": ["@fredck"],
     "documentation": "https://github.com/fredck/lightener/blob/master/README.md",
     "issue_tracker": "https://github.com/fredck/lightener/issues",
