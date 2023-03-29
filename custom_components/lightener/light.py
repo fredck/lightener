@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from math import ceil
 from typing import Any, Literal
 
 import voluptuous as vol
@@ -225,7 +224,7 @@ class LightenerLightEntity:
         entity_id: str,
         config: dict,
     ) -> None:
-        self._id = entity_id
+        self._entity_id = entity_id
         self._hass = hass
         self._parent = parent
 
@@ -255,30 +254,28 @@ class LightenerLightEntity:
         self._levels = levels
 
     @property
-    def entity_id(self) -> str:
-        return self._id
+    def entity_id(self: LightenerLightEntity) -> str:
+        """The original entity id of this managed entity."""
+
+        return self._entity_id
 
     @property
-    def state(self) -> Literal["on", "off"] | None:
-        return self._hass.states.get(self._id).state
+    def state(self: LightenerLightEntity) -> Literal["on", "off"] | None:
+        """The current state of this entity."""
 
-    @property
-    def brightness(self) -> int | None:
-        """Return the brightness of the light."""
-
-        state = self._hass.states.get(self._id).as_dict()
-
-        brightness = state.get("attributes").get(ATTR_BRIGHTNESS) or 0
-
-        return 100 if brightness == 255 else ceil(brightness / 255 * 99.0)
+        return self._hass.states.get(self._entity_id).state
 
     async def async_turn_on(self: LightenerLightEntity, brightness: int) -> None:
         """Turns the light on or off, according to the lightened configuration for the given brighteness."""
+
         self._hass.async_create_task(
             self._hass.services.async_call(
                 core.DOMAIN,
                 SERVICE_TURN_ON,
-                {ATTR_ENTITY_ID: self._id, ATTR_BRIGHTNESS: self._levels[brightness]},
+                {
+                    ATTR_ENTITY_ID: self._entity_id,
+                    ATTR_BRIGHTNESS: self._levels[brightness],
+                },
                 blocking=True,
                 context=Context(None, None, LIGHTENER_CONTEXT),
             )
@@ -291,7 +288,7 @@ class LightenerLightEntity:
             self._hass.services.async_call(
                 core.DOMAIN,
                 SERVICE_TURN_OFF,
-                {ATTR_ENTITY_ID: self._id},
+                {ATTR_ENTITY_ID: self._entity_id},
                 blocking=True,
                 context=Context(None, None, LIGHTENER_CONTEXT),
             )
