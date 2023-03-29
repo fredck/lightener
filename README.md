@@ -88,5 +88,6 @@ Have fun!
 
 [hacs]: https://github.com/hacs/integration
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+
 [releases-shield]: https://img.shields.io/github/release/fredck/lightener.svg?style=for-the-badge
-[releases]: https://github.com/ludeeus/integration_blueprint/releases
+[releases]: https://github.com/fredck/lightener/releases
