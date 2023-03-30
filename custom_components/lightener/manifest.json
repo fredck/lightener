@@ -1,10 +1,10 @@
 {
-    "domain": "lightener",
-    "name": "Lightener",
-    "version": "1.0.0",
-    "codeowners": ["@fredck"],
-    "documentation": "https://github.com/fredck/lightener/blob/master/README.md",
-    "issue_tracker": "https://github.com/fredck/lightener/issues",
-    "integration_type": "hub",
-    "iot_class": "local_push"
-  }
+  "domain": "lightener",
+  "name": "Lightener",
+  "codeowners": ["@fredck"],
+  "documentation": "https://github.com/fredck/lightener/blob/master/README.md",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/fredck/lightener/issues",
+  "version": "1.0.0"
+}
