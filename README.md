@@ -94,7 +94,7 @@ Once Home Assistant is restarted with the above configuration, the `light.living
 Have fun!
 
 [hacs]: https://github.com/hacs/integration
-[hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+[hacsbadge]: https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=for-the-badge
 
 [releases-shield]: https://img.shields.io/github/release/fredck/lightener.svg?style=for-the-badge
 [releases]: https://github.com/fredck/lightener/releases
