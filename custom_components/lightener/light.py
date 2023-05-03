@@ -31,6 +31,7 @@ from homeassistant.helpers.entity import async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import Event, async_track_state_change_event
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+import homeassistant.util.ulid as ulid_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_LIGHTS): cv.schema_with_slug_keys(LIGHT_SCHEMA)}
 )
 
-LIGHTENER_CONTEXT = "lightener_context"
+LIGHTENER_CONTEXT = ulid_util.ulid()
 
 
 def _convert_percent_to_brightness(percent: int) -> int:
