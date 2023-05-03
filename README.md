@@ -33,14 +33,7 @@ This integration allows for the magic to happen.
 
 ### Using HACS (recommended)
 
-We're applying for [Lightener to be a default reposity in HACS](https://github.com/hacs/default/pull/1821), which will allow for a much simpler installation. Until then, you can install it as a "custom" repository:
-
- 1. Go to HACs in your Home Assistant installation.
- 2. Go to "Integrations".
- 3. Click the three dots at the top-right of the page and select "Custom repositories".
- 4. In "Repository" paste the url of the Lightener GitHub repo: https://github.com/fredck/lightener
- 5. In "Category" select "Integration".
- 6. Click "Add" and you're all set.
+Simply search for `Lightener` in HACS and install it easily.
 
 ### Manual
 
