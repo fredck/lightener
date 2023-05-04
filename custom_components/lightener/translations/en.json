@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create a Lightener device",
+        "description": "Please give a name to the Lightener device being created",
+        "data": {
+          "name": "Device name"
+        },
+        "data_description": {
+          "name": "The goal is making it obvious which group of lights is controlled by this device. Usually it's an area/room name, like \"Living Room\" but it can be anything"
+        }
+      }
+    },
+    "error": {
+      "name_used": "The provided name is already in use by another light"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  }
+}
