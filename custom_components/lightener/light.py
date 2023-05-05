@@ -19,6 +19,7 @@ from homeassistant.const import (
     CONF_ENTITIES,
     CONF_FRIENDLY_NAME,
     CONF_LIGHTS,
+    EVENT_HOMEASSISTANT_STARTED,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_OFF,
@@ -254,6 +255,25 @@ class LightenerLightEntity:
 
         self._levels = levels
 
+        # Track the entity availability.
+        self._is_available = hass.states.get(self._entity_id) is not None
+
+        async def _async_state_changed(event: Event) -> None:
+            self._is_available = event.data.get("new_state") is not None
+
+        parent.async_on_remove(
+            async_track_state_change_event(hass, entity_id, _async_state_changed)
+        )
+
+        async def _async_check_available(event: Event) -> None:
+            if not self._is_available:
+                _LOGGER.warning(
+                    "Unable to find referenced entity %s or it is currently not available",
+                    entity_id,
+                )
+
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_check_available)
+
     @property
     def entity_id(self: LightenerLightEntity) -> str:
         """The original entity id of this managed entity."""
@@ -264,10 +284,16 @@ class LightenerLightEntity:
     def state(self: LightenerLightEntity) -> Literal["on", "off"] | None:
         """The current state of this entity."""
 
+        if not self._is_available:
+            return None
+
         return self._hass.states.get(self._entity_id).state
 
     async def async_turn_on(self: LightenerLightEntity, brightness: int) -> None:
         """Turns the light on or off, according to the lightened configuration for the given brighteness."""
+
+        if not self._is_available:
+            return
 
         self._hass.async_create_task(
             self._hass.services.async_call(
@@ -284,6 +310,9 @@ class LightenerLightEntity:
 
     async def async_turn_off(self: LightenerLightEntity) -> None:
         """Turn the light off."""
+
+        if not self._is_available:
+            return
 
         self._hass.async_create_task(
             self._hass.services.async_call(
