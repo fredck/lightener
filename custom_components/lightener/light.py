@@ -264,7 +264,12 @@ class LightenerLightEntity:
     def state(self: LightenerLightEntity) -> Literal["on", "off"] | None:
         """The current state of this entity."""
 
-        return self._hass.states.get(self._entity_id).state
+        entity_state = self._hass.states.get(self._entity_id)
+
+        if entity_state is None:
+            return None
+
+        return entity_state.state
 
     async def async_turn_on(self: LightenerLightEntity, brightness: int) -> None:
         """Turns the light on or off, according to the lightened configuration for the given brighteness."""
