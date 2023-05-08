@@ -9,18 +9,30 @@ import homeassistant.helpers.config_validation as cv
 import homeassistant.util.ulid as ulid_util
 import voluptuous as vol
 from homeassistant import core
-from homeassistant.components.light import (ATTR_BRIGHTNESS, ENTITY_ID_FORMAT,
-                                            ColorMode, LightEntity)
+from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
+    ENTITY_ID_FORMAT,
+    ColorMode,
+    LightEntity,
+)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (ATTR_ENTITY_ID, CONF_ENTITIES,
-                                 CONF_FRIENDLY_NAME, CONF_LIGHTS,
-                                 EVENT_HOMEASSISTANT_STARTED, SERVICE_TURN_OFF,
-                                 SERVICE_TURN_ON, STATE_OFF, STATE_ON)
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    CONF_ENTITIES,
+    CONF_FRIENDLY_NAME,
+    CONF_LIGHTS,
+    EVENT_HOMEASSISTANT_STARTED,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_OFF,
+    STATE_ON,
+)
 from homeassistant.core import Context, HomeAssistant, State
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import DeviceInfo, async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import Event, async_track_state_change_event
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DOMAIN
 
@@ -59,26 +71,68 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Setup entities for config entries."""
+    unique_id = config_entry.entry_id
+    data = update_config(config_entry.data, config_entry.version)
 
-    async_add_entities([LightenerLight(hass, config_entry)])
+    # The unique id of the light will simply match the config entry ID.
+    async_add_entities([LightenerLight(hass, data, unique_id)])
+
+
+async def async_setup_platform(
+    hass: HomeAssistant,
+    config: ConfigType,
+    async_add_entities: AddEntitiesCallback,
+    discovery_info: DiscoveryInfoType | None = None,
+) -> None:
+    """Set up entities for configuration.yaml entries."""
+
+    lights = []
+    version = config.get("version")
+
+    for object_id, entity_config in config[CONF_LIGHTS].items():
+        data = update_config(entity_config, version)
+        data["entity_id"] = object_id
+        lights.append(LightenerLight(hass, data))
+
+    async_add_entities(lights)
+
+
+def update_config(data: dict, version: int | None = None):
+    """Updates old versions of the configuration to the new format"""
+
+    # Lightner 1.x didn't have config entries, just manual configuration.yaml. We consider this the no-version option.
+    if version is None:
+        new_data = {"friendly_name": data.get("friendly_name"), "entities": {}}
+
+        for entity, brightness in data.get("entities").items():
+            new_data.get("entities")[entity] = {"brightness": brightness}
+
+        return new_data
+
+    if version == 1:
+        return data
+
+    _LOGGER.error('Unknow configuration version "%i"', version)
 
 
 class LightenerLight(LightEntity):
     """Represents a Lightener light."""
 
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    def __init__(
+        self, hass: HomeAssistant, config_data: dict, unique_id: str | None = None
+    ) -> None:
         """Initialize the light using the config entry information."""
 
         self._hass = hass
 
-        config_data = config_entry.data
-
-        # The unique id of the light will simply match the config entry ID.
-        self._unique_id = config_entry.entry_id
+        # Configuration coming from configuration.yaml will have no unique id.
+        self._unique_id = unique_id
 
         # Setup the id for this light. E.g. "light.living_room" if the name is "Living room".
         self.entity_id = async_generate_entity_id(
-            ENTITY_ID_FORMAT, config_data[CONF_FRIENDLY_NAME], hass=hass
+            ENTITY_ID_FORMAT,
+            config_data.get("entity_id", config_data[CONF_FRIENDLY_NAME]),
+            hass=hass,
         )
 
         # Define the display name of the light.
@@ -110,6 +164,10 @@ class LightenerLight(LightEntity):
     @property
     def device_info(self) -> DeviceInfo | None:
         """Return the device info."""
+
+        if self.unique_id is None:
+            return None
+
         return DeviceInfo(identifiers={(DOMAIN, self.unique_id)}, name=self._name)
 
     @property
@@ -117,7 +175,10 @@ class LightenerLight(LightEntity):
         """Return the display name of this light."""
 
         # This entity is the main feature (light) of the device, so we must return None.
-        return None
+        if self.unique_id is not None:
+            return None
+
+        return self._name
 
     @property
     def has_entity_name(self) -> bool:
