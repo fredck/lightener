@@ -2,39 +2,27 @@
 
 from __future__ import annotations
 
-from .const import DOMAIN
-
 import logging
 from typing import Any, Literal
 
-import voluptuous as vol
-
-from homeassistant import core
-from homeassistant.components.light import (
-    ATTR_BRIGHTNESS,
-    ENTITY_ID_FORMAT,
-    ColorMode,
-    LightEntity,
-)
-from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    CONF_ENTITIES,
-    CONF_FRIENDLY_NAME,
-    CONF_LIGHTS,
-    EVENT_HOMEASSISTANT_STARTED,
-    SERVICE_TURN_OFF,
-    SERVICE_TURN_ON,
-    STATE_OFF,
-    STATE_ON,
-)
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Context, HomeAssistant, State
 import homeassistant.helpers.config_validation as cv
+import homeassistant.util.ulid as ulid_util
+import voluptuous as vol
+from homeassistant import core
+from homeassistant.components.light import (ATTR_BRIGHTNESS, ENTITY_ID_FORMAT,
+                                            ColorMode, LightEntity)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (ATTR_ENTITY_ID, CONF_ENTITIES,
+                                 CONF_FRIENDLY_NAME, CONF_LIGHTS,
+                                 EVENT_HOMEASSISTANT_STARTED, SERVICE_TURN_OFF,
+                                 SERVICE_TURN_ON, STATE_OFF, STATE_ON)
+from homeassistant.core import Context, HomeAssistant, State
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import DeviceInfo, async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import Event, async_track_state_change_event
-import homeassistant.util.ulid as ulid_util
+
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -103,7 +91,7 @@ class LightenerLight(LightEntity):
 
         entities = []
 
-        if hasattr(config_data, CONF_ENTITIES):
+        if config_data.get(CONF_ENTITIES) is not None:
             for entity_id, entity_config in config_data[CONF_ENTITIES].items():
                 entities.append(
                     LightenerLightEntity(hass, self, entity_id, entity_config)
@@ -249,10 +237,10 @@ class LightenerLightEntity:
 
         config_levels = {}
 
-        for lightener_level, entity_value in config.items():
+        for lightener_level, entity_value in config.get("brightness", {}).items():
             config_levels[
-                _convert_percent_to_brightness(lightener_level)
-            ] = _convert_percent_to_brightness(entity_value)
+                _convert_percent_to_brightness(int(lightener_level))
+            ] = _convert_percent_to_brightness(int(entity_value))
 
         config_levels.setdefault(255, 255)
 

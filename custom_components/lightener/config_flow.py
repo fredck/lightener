@@ -6,7 +6,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_FRIENDLY_NAME
+from homeassistant.const import CONF_ENTITIES, CONF_FRIENDLY_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 from homeassistant.helpers.entity_registry import (
@@ -136,14 +136,14 @@ class LightenerFlow:
 
             # Load the previously configured list of entities controlled by this Lightener.
             controlled_entities = list(
-                self.config_entry.data.get("entities", {}).keys()
+                self.config_entry.data.get(CONF_ENTITIES, {}).keys()
             )
 
         if user_input is not None:
             controlled_entities = self.local_data[
                 "controlled_entities"
             ] = user_input.get("controlled_entities")
-            entities = self.data["entities"] = {}
+            entities = self.data[CONF_ENTITIES] = {}
 
             for entity in controlled_entities:
                 entities[entity] = {}
@@ -200,7 +200,7 @@ class LightenerFlow:
                 break
 
             if len(errors) == 0:
-                entities: dict = self.data.get("entities")
+                entities: dict = self.data.get(CONF_ENTITIES)
                 entities.get(self.local_data.get("current_light"))[
                     "brightness"
                 ] = brightness
@@ -220,7 +220,7 @@ class LightenerFlow:
             # Load the previously configured data.
             if self.config_entry is not None:
                 brightness = (
-                    self.config_entry.data.get("entities", {})
+                    self.config_entry.data.get(CONF_ENTITIES, {})
                     .get(light, {})
                     .get("brightness", {})
                 )
