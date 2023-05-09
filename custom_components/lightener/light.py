@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
+import homeassistant.helpers.config_validation as cv
+import homeassistant.util.ulid as ulid_util
 import voluptuous as vol
-
 from homeassistant import core
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -14,6 +15,7 @@ from homeassistant.components.light import (
     ColorMode,
     LightEntity,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     CONF_ENTITIES,
@@ -26,13 +28,13 @@ from homeassistant.const import (
     STATE_ON,
 )
 from homeassistant.core import Context, HomeAssistant, State
-import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
-from homeassistant.helpers.entity import async_generate_entity_id
+from homeassistant.helpers.entity import DeviceInfo, async_generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import Event, async_track_state_change_event
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
-import homeassistant.util.ulid as ulid_util
+
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,13 +65,17 @@ def _convert_percent_to_brightness(percent: int) -> int:
     return int(255 * percent / 100)
 
 
-async def _async_create_entities(hass: HomeAssistant, config):
-    lights = []
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Setup entities for config entries."""
+    unique_id = config_entry.entry_id
+    data = update_config(config_entry.data, config_entry.version)
 
-    for object_id, entity_config in config[CONF_LIGHTS].items():
-        lights.append(LightenerLight(hass, object_id, entity_config))
-
-    return lights
+    # The unique id of the light will simply match the config entry ID.
+    async_add_entities([LightenerLight(hass, data, unique_id)])
 
 
 async def async_setup_platform(
@@ -78,28 +84,59 @@ async def async_setup_platform(
     async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up the template lights."""
-    async_add_entities(await _async_create_entities(hass, config))
+    """Set up entities for configuration.yaml entries."""
+
+    lights = []
+    version = config.get("version")
+
+    for object_id, entity_config in config[CONF_LIGHTS].items():
+        data = update_config(entity_config, version)
+        data["entity_id"] = object_id
+        lights.append(LightenerLight(hass, data))
+
+    async_add_entities(lights)
+
+
+def update_config(data: dict, version: int | None = None):
+    """Updates old versions of the configuration to the new format"""
+
+    # Lightner 1.x didn't have config entries, just manual configuration.yaml. We consider this the no-version option.
+    if version is None:
+        new_data = {"friendly_name": data.get("friendly_name"), "entities": {}}
+
+        for entity, brightness in data.get("entities").items():
+            new_data.get("entities")[entity] = {"brightness": brightness}
+
+        return new_data
+
+    if version == 1:
+        return data
+
+    _LOGGER.error('Unknow configuration version "%i"', version)
 
 
 class LightenerLight(LightEntity):
     """Represents a Lightener light."""
 
-    def __init__(self, hass: HomeAssistant, object_id: str, config) -> None:
-        """Initialize the light."""
+    def __init__(
+        self, hass: HomeAssistant, config_data: dict, unique_id: str | None = None
+    ) -> None:
+        """Initialize the light using the config entry information."""
 
         self._hass = hass
 
-        # The unique id of the light is the one set in the configuration.
-        self._unique_id = object_id
+        # Configuration coming from configuration.yaml will have no unique id.
+        self._unique_id = unique_id
 
-        # Setup the id for this light. E.g. "light.living_room" if config has "living_room".
+        # Setup the id for this light. E.g. "light.living_room" if the name is "Living room".
         self.entity_id = async_generate_entity_id(
-            ENTITY_ID_FORMAT, object_id, hass=hass
+            ENTITY_ID_FORMAT,
+            config_data.get("entity_id", config_data[CONF_FRIENDLY_NAME]),
+            hass=hass,
         )
 
         # Define the display name of the light.
-        self._name = config.get(CONF_FRIENDLY_NAME)
+        self._name = config_data[CONF_FRIENDLY_NAME]
 
         self._state = STATE_OFF
         self._brightness = 255
@@ -108,8 +145,11 @@ class LightenerLight(LightEntity):
 
         entities = []
 
-        for entity_id, entity_config in config[CONF_ENTITIES].items():
-            entities.append(LightenerLightEntity(hass, self, entity_id, entity_config))
+        if config_data.get(CONF_ENTITIES) is not None:
+            for entity_id, entity_config in config_data[CONF_ENTITIES].items():
+                entities.append(
+                    LightenerLightEntity(hass, self, entity_id, entity_config)
+                )
 
         self._entities = entities
 
@@ -122,9 +162,27 @@ class LightenerLight(LightEntity):
         return self._unique_id
 
     @property
+    def device_info(self) -> DeviceInfo | None:
+        """Return the device info."""
+
+        if self.unique_id is None:
+            return None
+
+        return DeviceInfo(identifiers={(DOMAIN, self.unique_id)}, name=self._name)
+
+    @property
     def name(self) -> str:
         """Return the display name of this light."""
+
+        # This entity is the main feature (light) of the device, so we must return None.
+        if self.unique_id is not None:
+            return None
+
         return self._name
+
+    @property
+    def has_entity_name(self) -> bool:
+        return True
 
     @property
     def color_mode(self) -> str:
@@ -172,20 +230,26 @@ class LightenerLight(LightEntity):
 
             new_state: State = ev.data.get("new_state")
 
-            # Update brightness with the event value.
-            self._brightness = (
-                new_state.attributes.get(ATTR_BRIGHTNESS) or self._brightness
+            # The event may be fired with empty state when renaming the entity ID. In such case we do nothing.
+            if new_state is not None:
+                # Update brightness with the event value.
+                self._brightness = (
+                    new_state.attributes.get(ATTR_BRIGHTNESS) or self._brightness
+                )
+
+                if new_state.state == STATE_ON:
+                    for entity in self._entities:
+                        await entity.async_turn_on(self._brightness)
+
+                else:
+                    for entity in self._entities:
+                        await entity.async_turn_off()
+
+        self.async_on_remove(
+            async_track_state_change_event(
+                self._hass, self.entity_id, _async_state_change
             )
-
-            if new_state.state == STATE_ON:
-                for entity in self._entities:
-                    await entity.async_turn_on(self._brightness)
-
-            else:
-                for entity in self._entities:
-                    await entity.async_turn_off()
-
-        async_track_state_change_event(self._hass, self.entity_id, _async_state_change)
+        )
 
         # Track state changes of the child entities and update the lightener state accordingly.
 
@@ -209,10 +273,12 @@ class LightenerLight(LightEntity):
                 )
             )
 
-        async_track_state_change_event(
-            self._hass,
-            map(lambda e: e.entity_id, self._entities),
-            _async_child_state_change,
+        self.async_on_remove(
+            async_track_state_change_event(
+                self._hass,
+                map(lambda e: e.entity_id, self._entities),
+                _async_child_state_change,
+            )
         )
 
 
@@ -232,10 +298,10 @@ class LightenerLightEntity:
 
         config_levels = {}
 
-        for lightener_level, entity_value in config.items():
+        for lightener_level, entity_value in config.get("brightness", {}).items():
             config_levels[
-                _convert_percent_to_brightness(lightener_level)
-            ] = _convert_percent_to_brightness(entity_value)
+                _convert_percent_to_brightness(int(lightener_level))
+            ] = _convert_percent_to_brightness(int(entity_value))
 
         config_levels.setdefault(255, 255)
 
