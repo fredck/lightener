@@ -1,0 +1,30 @@
+# Attention: This file is for development purpose only and can be ignored.
+
+# https://www.home-assistant.io/integrations/default_config/
+default_config:
+
+# https://www.home-assistant.io/integrations/logger/
+logger:
+  default: info
+  logs:
+    custom_components.lightener: debug
+
+# Create a few fake lights take can be used in ha to create Lightener lights.
+light:
+  - platform: template
+    lights:
+      living_room_ceiling:
+        friendly_name: "Living Room Ceiling Lights"
+        turn_on:
+        turn_off:
+        set_level:
+      living_room_ceiling_leds:
+        friendly_name: "Living Room Ceiling Leds"
+        turn_on:
+        turn_off:
+        set_level:
+      living_room_sofa_lamp:
+        friendly_name: "Living Room Sofa Lamp"
+        turn_on:
+        turn_off:
+        set_level:

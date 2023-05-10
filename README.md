@@ -51,7 +51,7 @@ To start, in your Home Assistant installation:
 
 The above will start the configuration flow for a new Lightener light which includes several steps:
 
-  1. Give a name for your Lightener light. This name should make it easy for users to understand which lights are controlled. For example, if several lights in the living room are to be controlled, you may call it "Living Room", simply. 
+  1. Give a name for your Lightener light. This name should make it easy for users to understand which lights are controlled. For example, if several lights in the living room are to be controlled, you may call it "Living Room", simply.
   2. Select the lights that you want to be controlled.
   3. Configure each of the selected lights.
 
