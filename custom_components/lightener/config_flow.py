@@ -113,6 +113,7 @@ class LightenerFlow:
 
         return self.flow_handler.async_show_form(
             step_id=self.steps.get("name", "name"),
+            last_step=False,
             data_schema=vol.Schema(data_schema),
             errors=errors,
         )
@@ -185,7 +186,7 @@ class LightenerFlow:
             brightness = {}
 
             for entry in user_input.get("brightness", "").splitlines():
-                match = re.fullmatch(r"^(\d+)\s*:\s*(\d+)\s*$", entry)
+                match = re.fullmatch(r"^\s*(\d+)\s*:\s*(\d+)\s*$", entry)
 
                 if match is not None:
                     left = int(match.group(1))
