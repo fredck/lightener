@@ -11,6 +11,7 @@ import voluptuous as vol
 from homeassistant import core
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
+    DOMAIN as LIGHT_DOMAIN,
     ENTITY_ID_FORMAT,
     ColorMode,
     LightEntity,
@@ -123,7 +124,7 @@ class LightenerLight(LightEntity):
     ) -> None:
         """Initialize the light using the config entry information."""
 
-        self._hass = hass
+        self.hass = hass
 
         # Configuration coming from configuration.yaml will have no unique id.
         self._unique_id = unique_id
@@ -232,7 +233,8 @@ class LightenerLight(LightEntity):
 
             # The event may be fired with empty state when renaming the entity ID. In such case we do nothing.
             if new_state is not None:
-                # Update brightness with the event value.
+                # Update the local state with the event one.
+                self._state = new_state.state
                 self._brightness = (
                     new_state.attributes.get(ATTR_BRIGHTNESS) or self._brightness
                 )
@@ -247,7 +249,7 @@ class LightenerLight(LightEntity):
 
         self.async_on_remove(
             async_track_state_change_event(
-                self._hass, self.entity_id, _async_state_change
+                self.hass, self.entity_id, _async_state_change
             )
         )
 
@@ -263,8 +265,8 @@ class LightenerLight(LightEntity):
             if any(entity.state == STATE_ON for entity in self._entities):
                 service_to_call = SERVICE_TURN_ON
 
-            self._hass.async_create_task(
-                self._hass.services.async_call(
+            self.hass.async_create_task(
+                self.hass.services.async_call(
                     core.DOMAIN,
                     service_to_call,
                     {ATTR_ENTITY_ID: self.entity_id},
@@ -275,7 +277,7 @@ class LightenerLight(LightEntity):
 
         self.async_on_remove(
             async_track_state_change_event(
-                self._hass,
+                self.hass,
                 map(lambda e: e.entity_id, self._entities),
                 _async_child_state_change,
             )
@@ -293,7 +295,7 @@ class LightenerLightEntity:
         config: dict,
     ) -> None:
         self._entity_id = entity_id
-        self._hass = hass
+        self.hass = hass
         self._parent = parent
 
         config_levels = {}
@@ -353,7 +355,7 @@ class LightenerLightEntity:
         if not self._is_available:
             return None
 
-        return self._hass.states.get(self._entity_id).state
+        return self.hass.states.get(self._entity_id).state
 
     async def async_turn_on(self: LightenerLightEntity, brightness: int) -> None:
         """Turns the light on or off, according to the lightened configuration for the given brighteness."""
@@ -361,9 +363,9 @@ class LightenerLightEntity:
         if not self._is_available:
             return
 
-        self._hass.async_create_task(
-            self._hass.services.async_call(
-                core.DOMAIN,
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                LIGHT_DOMAIN,
                 SERVICE_TURN_ON,
                 {
                     ATTR_ENTITY_ID: self._entity_id,
@@ -380,9 +382,9 @@ class LightenerLightEntity:
         if not self._is_available:
             return
 
-        self._hass.async_create_task(
-            self._hass.services.async_call(
-                core.DOMAIN,
+        self.hass.async_create_task(
+            self.hass.services.async_call(
+                LIGHT_DOMAIN,
                 SERVICE_TURN_OFF,
                 {ATTR_ENTITY_ID: self._entity_id},
                 blocking=True,

@@ -6,7 +6,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_ENTITIES, CONF_FRIENDLY_NAME
+from homeassistant.const import CONF_ENTITIES, CONF_FRIENDLY_NAME, CONF_BRIGHTNESS
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 from homeassistant.helpers.entity_registry import (
@@ -113,6 +113,7 @@ class LightenerFlow:
 
         return self.flow_handler.async_show_form(
             step_id=self.steps.get("name", "name"),
+            last_step=False,
             data_schema=vol.Schema(data_schema),
             errors=errors,
         )
@@ -185,14 +186,14 @@ class LightenerFlow:
             brightness = {}
 
             for entry in user_input.get("brightness", "").splitlines():
-                match = re.fullmatch(r"^(\d+)\s*:\s*(\d+)\s*$", entry)
+                match = re.fullmatch(r"^\s*(\d+)\s*:\s*(\d+)\s*$", entry)
 
                 if match is not None:
                     left = int(match.group(1))
                     right = int(match.group(2))
 
                     if left >= 1 and left <= 100 and right <= 100:
-                        brightness[left] = str(right)
+                        brightness[str(left)] = str(right)
                         continue
 
                 errors["brightness"] = "invalid_brightness"
@@ -202,7 +203,7 @@ class LightenerFlow:
             if len(errors) == 0:
                 entities: dict = self.data.get(CONF_ENTITIES)
                 entities.get(self.local_data.get("current_light"))[
-                    "brightness"
+                    CONF_BRIGHTNESS
                 ] = brightness
 
                 if len(controlled_entities):
@@ -222,7 +223,7 @@ class LightenerFlow:
                 brightness = (
                     self.config_entry.data.get(CONF_ENTITIES, {})
                     .get(light, {})
-                    .get("brightness", {})
+                    .get(CONF_BRIGHTNESS, {})
                 )
 
                 brightness = "\n".join(
