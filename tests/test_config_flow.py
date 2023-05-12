@@ -8,7 +8,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_BRIGHTNESS, CONF_ENTITIES, CONF_FRIENDLY_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers.entity_registry import async_get
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lightener import const
@@ -122,7 +122,7 @@ async def test_step_lights_no_lightener(hass: HomeAssistant) -> None:
     )
     entry.add_to_hass(hass)
 
-    entity_registry = async_get(hass)
+    entity_registry = async_get_entity_registry(hass)
 
     entity_registry.async_get_or_create(
         domain="light",
