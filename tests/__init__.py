@@ -1,1 +1,1 @@
-"""Tests for Lightener"""
+"""Tests"""
