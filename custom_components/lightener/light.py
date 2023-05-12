@@ -3,19 +3,16 @@
 from __future__ import annotations
 
 import logging
+from types import MappingProxyType
 from typing import Any, Literal
 
 import homeassistant.helpers.config_validation as cv
 import homeassistant.util.ulid as ulid_util
 import voluptuous as vol
 from homeassistant import core
-from homeassistant.components.light import (
-    ATTR_BRIGHTNESS,
-    DOMAIN as LIGHT_DOMAIN,
-    ENTITY_ID_FORMAT,
-    ColorMode,
-    LightEntity,
-)
+from homeassistant.components.light import ATTR_BRIGHTNESS
+from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
+from homeassistant.components.light import ENTITY_ID_FORMAT, ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -35,6 +32,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import Event, async_track_state_change_event
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
+from . import async_migrate_entry
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,10 +71,11 @@ async def async_setup_entry(
 ) -> None:
     """Setup entities for config entries."""
     unique_id = config_entry.entry_id
-    data = update_config(config_entry.data, config_entry.version)
+
+    await async_migrate_entry(hass, config_entry)
 
     # The unique id of the light will simply match the config entry ID.
-    async_add_entities([LightenerLight(hass, data, unique_id)])
+    async_add_entities([LightenerLight(hass, config_entry.data, unique_id)])
 
 
 async def async_setup_platform(
@@ -88,39 +87,26 @@ async def async_setup_platform(
     """Set up entities for configuration.yaml entries."""
 
     lights = []
-    version = config.get("version")
 
     for object_id, entity_config in config[CONF_LIGHTS].items():
-        data = update_config(entity_config, version)
-        data["entity_id"] = object_id
-        lights.append(LightenerLight(hass, data))
+        entry = ConfigEntry(1, DOMAIN, "", entity_config, "user")
+
+        await async_migrate_entry(hass, entry, False)
+
+        entry.data["entity_id"] = object_id
+        lights.append(LightenerLight(hass, entry.data))
 
     async_add_entities(lights)
-
-
-def update_config(data: dict, version: int | None = None):
-    """Updates old versions of the configuration to the new format"""
-
-    # Lightner 1.x didn't have config entries, just manual configuration.yaml. We consider this the no-version option.
-    if version is None:
-        new_data = {"friendly_name": data.get("friendly_name"), "entities": {}}
-
-        for entity, brightness in data.get("entities").items():
-            new_data.get("entities")[entity] = {"brightness": brightness}
-
-        return new_data
-
-    if version == 1:
-        return data
-
-    _LOGGER.error('Unknow configuration version "%i"', version)
 
 
 class LightenerLight(LightEntity):
     """Represents a Lightener light."""
 
     def __init__(
-        self, hass: HomeAssistant, config_data: dict, unique_id: str | None = None
+        self,
+        hass: HomeAssistant,
+        config_data: MappingProxyType,
+        unique_id: str | None = None,
     ) -> None:
         """Initialize the light using the config entry information."""
 

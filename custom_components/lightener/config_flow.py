@@ -23,7 +23,7 @@ class LightenerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     # The schema version of the entries that it creates.
     # Home Assistant will call the migrate method if the version changes.
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         """Initialize options flow."""

@@ -12,6 +12,7 @@ from homeassistant.helpers.entity_registry import async_get as async_get_entity_
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lightener import const
+from custom_components.lightener.config_flow import LightenerConfigFlow
 
 
 async def test_config_flow_steps(hass: HomeAssistant) -> None:
@@ -67,6 +68,7 @@ async def test_options_flow_steps(hass: HomeAssistant) -> None:
 
     entry = MockConfigEntry(
         domain="lightener",
+        version=LightenerConfigFlow.VERSION,
         unique_id=str(uuid4()),
         data={
             CONF_ENTITIES: {
@@ -105,7 +107,7 @@ async def test_options_flow_steps(hass: HomeAssistant) -> None:
     assert result["title"] == ""
     assert result["data"] == {}
 
-    assert entry.data == {
+    assert dict(entry.data) == {
         CONF_ENTITIES: {"light.test1": {CONF_BRIGHTNESS: {"50": "60"}}}
     }
 
