@@ -1,10 +1,18 @@
 """Tests for the light platform"""
 
+from unittest.mock import ANY, Mock, patch
 from uuid import uuid4
 
-import pytest
-from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode
-from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant.components.light import ATTR_BRIGHTNESS
+from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
+from homeassistant.components.light import ColorMode
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_OFF,
+    STATE_ON,
+)
 from homeassistant.core import HomeAssistant
 
 from custom_components.lightener.light import (
@@ -147,7 +155,57 @@ async def test_lightener_light_entity_properties(hass):
     assert light.state == "off"
 
 
-@pytest.mark.skip(reason="I have no idea how to run this test :(")
+async def test_lightener_light_entity_calculated_levels(hass):
+    """Test the calculation of brigthness levels"""
+
+    # pylint: disable=W0212
+
+    config = {"friendly_name": "Living Room"}
+    unique_id = str(uuid4())
+
+    lightener = LightenerLight(hass, config, unique_id)
+
+    light = LightenerLightEntity(
+        hass,
+        lightener,
+        "light.test1",
+        {
+            "brightness": {
+                "10": "100",
+            }
+        },
+    )
+
+    assert light._levels[0] == 0
+    assert light._levels[13] == 128
+    assert light._levels[25] == 246
+    assert light._levels[26] == 255
+    assert light._levels[27] == 255
+    assert light._levels[100] == 255
+    assert light._levels[255] == 255
+
+    light = LightenerLightEntity(
+        hass,
+        lightener,
+        "light.test1",
+        {
+            "brightness": {
+                "100": "0",  # Test the ordering
+                "10": "10",
+                "50": "100",
+            }
+        },
+    )
+
+    assert light._levels[0] == 0
+    assert light._levels[15] == 15
+    assert light._levels[26] == 26
+    assert light._levels[27] == 29
+    assert light._levels[128] == 255
+    assert light._levels[129] == 253
+    assert light._levels[255] == 0
+
+
 async def test_lightener_light_entity_turn_on(hass: HomeAssistant):
     """Test the turn on of LightenerLightEntity"""
 
@@ -159,12 +217,42 @@ async def test_lightener_light_entity_turn_on(hass: HomeAssistant):
         hass, lightener, "light.test1", {"brightness": {"50": "100"}}
     )
 
-    lightener_brightness = _convert_percent_to_brightness(25)
-    await light.async_turn_on(lightener_brightness)
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await light.async_turn_on(_convert_percent_to_brightness(25))
 
-    state = hass.states.get(light.entity_id)
-    assert state.state == STATE_ON
-    assert state.attributes[ATTR_BRIGHTNESS] == lightener_brightness * 2
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {
+            ATTR_ENTITY_ID: "light.test1",
+            ATTR_BRIGHTNESS: _convert_percent_to_brightness(50),
+        },
+        blocking=True,
+        context=ANY,
+    )
+
+
+async def test_lightener_light_entity_turn_off(hass: HomeAssistant):
+    """Test the turn on of LightenerLightEntity"""
+
+    config = {"friendly_name": "Living Room"}
+
+    lightener = LightenerLight(hass, config, str(uuid4()))
+
+    light = LightenerLightEntity(
+        hass, lightener, "light.test1", {"brightness": {"50": "100"}}
+    )
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await light.async_turn_off()
+
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_OFF,
+        {ATTR_ENTITY_ID: "light.test1"},
+        blocking=True,
+        context=ANY,
+    )
 
 
 ###########################################################
@@ -175,5 +263,5 @@ def test_convert_percent_to_brightness():
     """Test the _convert_percent_to_brightness function"""
 
     assert _convert_percent_to_brightness(0) == 0
-    assert _convert_percent_to_brightness(10) == 25
+    assert _convert_percent_to_brightness(10) == 26
     assert _convert_percent_to_brightness(100) == 255

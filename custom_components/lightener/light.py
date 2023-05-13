@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from types import MappingProxyType
 from typing import Any, Literal
+from collections import OrderedDict
+
+import math
 
 import homeassistant.helpers.config_validation as cv
 import homeassistant.util.ulid as ulid_util
@@ -61,7 +64,7 @@ LIGHTENER_CONTEXT = ulid_util.ulid()
 
 
 def _convert_percent_to_brightness(percent: int) -> int:
-    return int(255 * percent / 100)
+    return math.ceil(255 * percent / 100)
 
 
 async def async_setup_entry(
@@ -293,19 +296,30 @@ class LightenerLightEntity:
 
         config_levels.setdefault(255, 255)
 
+        config_levels = OrderedDict(sorted(config_levels.items()))
+
         # Start the level list with value 0 for level 0.
         levels = [0]
 
-        previous = 0
+        previous_lightener_level = 0
+        previous_light_level = 0
 
         # Fill all levels with the calculated values between the ranges.
-        for level in sorted(config_levels.keys()):
-            previous_level = 0 if previous == 0 else config_levels.get(previous)
-            step = (config_levels.get(level) - previous_level) / (level - previous)
-            for i in range(previous + 1, level + 1):
-                value_at_current_level = int(step * (i - previous) + previous_level)
+        for lightener_level, light_level in config_levels.items():
+            for i in range(previous_lightener_level + 1, lightener_level):
+                value_at_current_level = math.ceil(
+                    previous_light_level
+                    + (light_level - previous_light_level)
+                    * (i - previous_lightener_level)
+                    / (lightener_level - previous_lightener_level)
+                )
                 levels.append(value_at_current_level)
-            previous = level
+
+            # To account for rounding, we use the configured values directly.
+            levels.append(light_level)
+
+            previous_lightener_level = lightener_level
+            previous_light_level = light_level
 
         self._levels = levels
 
