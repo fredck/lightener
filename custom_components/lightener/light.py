@@ -96,8 +96,10 @@ async def async_setup_platform(
 
         await async_migrate_entry(hass, entry, False)
 
-        entry.data["entity_id"] = object_id
-        lights.append(LightenerLight(hass, entry.data))
+        data = dict(entry.data)
+        data["entity_id"] = object_id
+
+        lights.append(LightenerLight(hass, data))
 
     async_add_entities(lights)
 

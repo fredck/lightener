@@ -19,6 +19,7 @@ from custom_components.lightener.light import (
     LightenerLight,
     LightenerLightEntity,
     _convert_percent_to_brightness,
+    async_setup_platform,
 )
 
 ###########################################################
@@ -256,7 +257,7 @@ async def test_lightener_light_entity_turn_off(hass: HomeAssistant):
 
 
 ###########################################################
-### LightenerLightEntity class only tests
+### Other
 
 
 def test_convert_percent_to_brightness():
@@ -265,3 +266,59 @@ def test_convert_percent_to_brightness():
     assert _convert_percent_to_brightness(0) == 0
     assert _convert_percent_to_brightness(10) == 26
     assert _convert_percent_to_brightness(100) == 255
+
+
+async def test_async_setup_platform(hass):
+    """Test for platform setup"""
+
+    # pylint: disable=W0212
+
+    async_add_entities_mock = Mock()
+
+    config = {
+        "platform": "lightener",
+        "lights": {
+            "lightener_1": {
+                "friendly_name": "Lightener 1",
+                "entities": {"light.test1": {10: 100}},
+            },
+            "lightener_2": {
+                "friendly_name": "Lightener 2",
+                "entities": {"light.test2": {100: 10}},
+            },
+        },
+    }
+
+    await async_setup_platform(hass, config, async_add_entities_mock)
+
+    assert async_add_entities_mock.call_count == 1
+
+    created_lights: list = async_add_entities_mock.call_args.args[0]
+
+    assert len(created_lights) == 2
+
+    light: LightenerLight = created_lights[0]
+
+    assert isinstance(light, LightenerLight)
+    assert light.entity_id == "light.lightener_1"
+    assert light.name == "Lightener 1"
+    assert len(light._entities) == 1
+
+    controlled_light: LightenerLightEntity = light._entities[0]
+
+    assert isinstance(controlled_light, LightenerLightEntity)
+    assert controlled_light.entity_id == "light.test1"
+    assert controlled_light._levels[26] == 255
+
+    light: LightenerLight = created_lights[1]
+
+    assert isinstance(light, LightenerLight)
+    assert light.entity_id == "light.lightener_2"
+    assert light.name == "Lightener 2"
+    assert len(light._entities) == 1
+
+    controlled_light: LightenerLightEntity = light._entities[0]
+
+    assert isinstance(controlled_light, LightenerLightEntity)
+    assert controlled_light.entity_id == "light.test2"
+    assert controlled_light._levels[255] == 26

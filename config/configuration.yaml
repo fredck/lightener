@@ -28,3 +28,25 @@ light:
         turn_on:
         turn_off:
         set_level:
+
+  # This is the Lightener v1 configuration example.
+  # Although *still* supported it has been replaced by UI configuration with v2.
+  #
+  # - platform: lightener
+  #   lights:
+  #     # This defines the entity id of your virtual light ("light.living_room_v1").
+  #     living_room_v1:
+  #       ## The display name of your virtual light (optional).
+  #       friendly_name: "Living Room Lightened"
+  #       ## The list of the existing light entities that will be managed by the virtual light.
+  #       entities:
+  #         light.living_room_ceiling_leds:
+  #           80: 100 # At 80% (room) the leds will reach 100% brightness.
+  #         light.living_room_sofa_lamp:
+  #           20: 0 # At 20% (room) the sofa light is still off.
+  #           60: 100 # At 60% (room) the sofa light reaches 100% brightness.
+  #         light.living_room_ceiling:
+  #           60: 0 # At 60% (room) the main ceiling light is still off.
+  #           # 100: 100 ... no need for this as it is de default.
+
+  #     # As many virtual lights as you want can be added here.
