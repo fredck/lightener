@@ -38,6 +38,8 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from . import async_migrate_entry
 from .const import DOMAIN
 
+SIDE_EFFECT_CONTEXT_ID = ulid_util.ulid()
+
 _LOGGER = logging.getLogger(__name__)
 
 ENTITY_SCHEMA = vol.All(
@@ -59,8 +61,6 @@ LIGHT_SCHEMA = vol.Schema(
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_LIGHTS): cv.schema_with_slug_keys(LIGHT_SCHEMA)}
 )
-
-LIGHTENER_CONTEXT = ulid_util.ulid()
 
 
 def _convert_percent_to_brightness(percent: int) -> int:
@@ -116,6 +116,8 @@ class LightenerLight(LightEntity):
         """Initialize the light using the config entry information."""
 
         self.hass = hass
+
+        self.context_id = ulid_util.ulid()
 
         # Configuration coming from configuration.yaml will have no unique id.
         self._unique_id = unique_id
@@ -217,7 +219,7 @@ class LightenerLight(LightEntity):
     async def async_added_to_hass(self) -> None:
         async def _async_state_change(ev: Event) -> None:
             # Do nothing if the change has been triggered when a child entity was changed directly.
-            if ev.context.id == LIGHTENER_CONTEXT:
+            if ev.context.id == self.context_id or ev.context.id == SIDE_EFFECT_CONTEXT_ID:
                 return
 
             new_state: State = ev.data.get("new_state")
@@ -248,7 +250,7 @@ class LightenerLight(LightEntity):
 
         async def _async_child_state_change(ev: Event) -> None:
             # Do nothing if the change has been triggered by the lightener.
-            if ev.context.id == LIGHTENER_CONTEXT:
+            if ev.context.id == self.context_id:
                 return
 
             service_to_call = SERVICE_TURN_OFF
@@ -256,13 +258,18 @@ class LightenerLight(LightEntity):
             if any(entity.state == STATE_ON for entity in self._entities):
                 service_to_call = SERVICE_TURN_ON
 
+            if (service_to_call == SERVICE_TURN_ON and self.state == STATE_ON) or (
+                service_to_call == SERVICE_TURN_OFF and self.state == STATE_OFF
+            ):
+                return
+
             self.hass.async_create_task(
                 self.hass.services.async_call(
                     core.DOMAIN,
                     service_to_call,
                     {ATTR_ENTITY_ID: self.entity_id},
                     blocking=True,
-                    context=Context(None, None, LIGHTENER_CONTEXT),
+                    context=Context(None, None, SIDE_EFFECT_CONTEXT_ID),
                 )
             )
 
@@ -374,7 +381,7 @@ class LightenerLightEntity:
                     ATTR_BRIGHTNESS: self._levels[brightness],
                 },
                 blocking=True,
-                context=Context(None, None, LIGHTENER_CONTEXT),
+                context=Context(None, None, self._parent.context_id),
             )
         )
 
@@ -390,6 +397,6 @@ class LightenerLightEntity:
                 SERVICE_TURN_OFF,
                 {ATTR_ENTITY_ID: self._entity_id},
                 blocking=True,
-                context=Context(None, None, LIGHTENER_CONTEXT),
+                context=Context(None, None, self._parent.context_id),
             )
         )

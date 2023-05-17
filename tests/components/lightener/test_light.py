@@ -136,6 +136,122 @@ async def test_lightener_light_on_state_change(hass: HomeAssistant):
     assert lightener.brightness == 120
 
 
+async def test_lightener_light_cross_controll(hass: HomeAssistant):
+    """Test Lightener controlling other Lighteners"""
+
+    lightener1 = LightenerLight(
+        hass,
+        {
+            "friendly_name": "Lightener1",
+            "entities": {
+                "light.test1": {"brightness": {}},
+                "light.test2": {"brightness": {}},
+            },
+        },
+    )
+    await lightener1.async_added_to_hass()
+
+    lightener2 = LightenerLight(
+        hass,
+        {
+            "friendly_name": "Lightener2",
+            "entities": {
+                "light.test1": {"brightness": {}},
+                "light.lightener1": {"brightness": {}},
+            },
+        },
+    )
+    await lightener2.async_added_to_hass()
+
+    lightener3 = LightenerLight(
+        hass,
+        {
+            "friendly_name": "Lightener3",
+            "entities": {
+                "light.lightener1": {"brightness": {}},
+                "light.lightener2": {"brightness": {}},
+            },
+        },
+    )
+    await lightener3.async_added_to_hass()
+
+    await lightener1.async_turn_off()
+    await lightener2.async_turn_off()
+    await lightener3.async_turn_off()
+
+    await hass.async_block_till_done()
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener1.async_turn_on()
+        await hass.async_block_till_done()
+
+    # [0] -> light.test1 for light.lightener1
+    # [1] -> light.test2 for light.lightener1
+    # [2] -> light.test1 for light.lightener2
+    # [3] -> light.lightener1 from for light.lightener3
+    assert async_call_mock.call_count == 4
+
+    assert async_call_mock.mock_calls[0].args[2]["entity_id"] == "light.test1"
+    assert async_call_mock.mock_calls[1].args[2]["entity_id"] == "light.test2"
+    assert async_call_mock.mock_calls[2].args[2]["entity_id"] == "light.lightener2"
+    assert async_call_mock.mock_calls[3].args[2]["entity_id"] == "light.lightener3"
+
+async def test_lightener_light_cross_controll2(hass: HomeAssistant):
+    """Test Lightener controlling other Lighteners"""
+
+    lightener1 = LightenerLight(
+        hass,
+        {
+            "friendly_name": "Lightener1",
+            "entities": {
+                "light.test1": {"brightness": {}},
+                "light.test2": {"brightness": {}},
+            },
+        },
+    )
+    await lightener1.async_added_to_hass()
+
+    lightener2 = LightenerLight(
+        hass,
+        {
+            "friendly_name": "Lightener2",
+            "entities": {
+                "light.test1": {"brightness": {}},
+                "light.lightener1": {"brightness": {}},
+            },
+        },
+    )
+    await lightener2.async_added_to_hass()
+
+    lightener3 = LightenerLight(
+        hass,
+        {
+            "friendly_name": "Lightener3",
+            "entities": {
+                "light.lightener1": {"brightness": {}},
+                "light.lightener2": {"brightness": {}},
+            },
+        },
+    )
+    await lightener3.async_added_to_hass()
+
+    await lightener1.async_turn_off()
+    await lightener2.async_turn_off()
+    await lightener3.async_turn_off()
+
+    await hass.async_block_till_done()
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener2.async_turn_on()
+        await hass.async_block_till_done()
+
+    # assert async_call_mock.call_count == 4
+
+    assert async_call_mock.mock_calls[0].args[2]["entity_id"] == "light.test1"
+    assert async_call_mock.mock_calls[1].args[2]["entity_id"] == "light.lightener1"
+    assert async_call_mock.mock_calls[2].args[2]["entity_id"] == "light.lightener3"
+    # assert async_call_mock.mock_calls[3].args[2]["entity_id"] == "light.test2"
+
 ###########################################################
 ### LightenerLightEntity class only tests
 
