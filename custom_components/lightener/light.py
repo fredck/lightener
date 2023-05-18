@@ -3,36 +3,26 @@
 from __future__ import annotations
 
 import logging
-from types import MappingProxyType
-from typing import Any, Literal
-from collections import OrderedDict
-
 import math
+from collections import OrderedDict
+from types import MappingProxyType
+from typing import Any
 
 import homeassistant.helpers.config_validation as cv
 import homeassistant.util.ulid as ulid_util
 import voluptuous as vol
-from homeassistant import core
+from homeassistant.components.group.light import (FORWARDED_ATTRIBUTES,
+                                                  LightGroup)
 from homeassistant.components.light import ATTR_BRIGHTNESS
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.components.light import ENTITY_ID_FORMAT, ColorMode, LightEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    CONF_ENTITIES,
-    CONF_FRIENDLY_NAME,
-    CONF_LIGHTS,
-    EVENT_HOMEASSISTANT_STARTED,
-    SERVICE_TURN_OFF,
-    SERVICE_TURN_ON,
-    STATE_OFF,
-    STATE_ON,
-)
-from homeassistant.core import Context, HomeAssistant, State
+from homeassistant.const import (ATTR_ENTITY_ID, CONF_ENTITIES,
+                                 CONF_FRIENDLY_NAME, CONF_LIGHTS,
+                                 SERVICE_TURN_ON, STATE_OFF, STATE_ON)
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
-from homeassistant.helpers.entity import DeviceInfo, async_generate_entity_id
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import Event, async_track_state_change_event
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from . import async_migrate_entry
@@ -78,7 +68,7 @@ async def async_setup_entry(
     await async_migrate_entry(hass, config_entry)
 
     # The unique id of the light will simply match the config entry ID.
-    async_add_entities([LightenerLight(hass, config_entry.data, unique_id)])
+    async_add_entities([LightenerLight(config_entry.data, unique_id)])
 
 
 async def async_setup_platform(
@@ -99,202 +89,133 @@ async def async_setup_platform(
         data = dict(entry.data)
         data["entity_id"] = object_id
 
-        lights.append(LightenerLight(hass, data))
+        lights.append(LightenerLight(data))
 
     async_add_entities(lights)
 
 
-class LightenerLight(LightEntity):
+class LightenerLight(LightGroup):
     """Represents a Lightener light."""
 
     def __init__(
         self,
-        hass: HomeAssistant,
         config_data: MappingProxyType,
         unique_id: str | None = None,
     ) -> None:
         """Initialize the light using the config entry information."""
 
-        self.hass = hass
-
-        self.context_id = ulid_util.ulid()
-
-        # Configuration coming from configuration.yaml will have no unique id.
-        self._unique_id = unique_id
-
-        # Setup the id for this light. E.g. "light.living_room" if the name is "Living room".
-        self.entity_id = async_generate_entity_id(
-            ENTITY_ID_FORMAT,
-            config_data.get("entity_id", config_data[CONF_FRIENDLY_NAME]),
-            hass=hass,
-        )
-
-        # Define the display name of the light.
-        self._name = config_data[CONF_FRIENDLY_NAME]
-
-        self._state = STATE_OFF
-        self._brightness = 255
-
         ## Add all entities that are managed by this lightened.
-
-        entities = []
+        entities: list[LightenerControlledLight] = []
+        entity_ids: list[str] = []
 
         if config_data.get(CONF_ENTITIES) is not None:
             for entity_id, entity_config in config_data[CONF_ENTITIES].items():
+                entity_ids.append(entity_id)
                 entities.append(
-                    LightenerLightEntity(hass, self, entity_id, entity_config)
+                    LightenerControlledLight(entity_id, entity_config)
                 )
+
+        super().__init__(
+            unique_id=unique_id,
+            name=config_data[CONF_FRIENDLY_NAME] if unique_id is None else None,
+            entity_ids=entity_ids,
+            mode=None
+        )
+
+        self._attr_has_entity_name = unique_id is not None
+
+        if self._attr_has_entity_name:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, self.unique_id)},
+                name=config_data[CONF_FRIENDLY_NAME]
+            )
 
         self._entities = entities
 
-    @property
-    def should_poll(self) -> bool:
-        return False
-
-    @property
-    def unique_id(self) -> str | None:
-        return self._unique_id
-
-    @property
-    def device_info(self) -> DeviceInfo | None:
-        """Return the device info."""
-
-        if self.unique_id is None:
-            return None
-
-        return DeviceInfo(identifiers={(DOMAIN, self.unique_id)}, name=self._name)
-
-    @property
-    def name(self) -> str:
-        """Return the display name of this light."""
-
-        # This entity is the main feature (light) of the device, so we must return None.
-        if self.unique_id is not None:
-            return None
-
-        return self._name
-
-    @property
-    def has_entity_name(self) -> bool:
-        return True
-
-    @property
-    def color_mode(self) -> str:
-        """Return the color mode of the light."""
-
-        # A lightened supports brightenes control only.
-        return ColorMode.BRIGHTNESS
-
-    @property
-    def supported_color_modes(self) -> set[str] | None:
-        """Flag supported color modes."""
-        return {self.color_mode}
-
-    @property
-    def icon(self) -> str | None:
-        return "mdi:lightbulb-group"
-
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if light is on."""
-        return None if self._state is None else self._state == STATE_ON
-
-    @property
-    def brightness(self) -> int | None:
-        return self._brightness
-
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the lights on."""
+        """Forward the turn_on command to all controlled lights."""
 
-        self._state = STATE_ON
-        self._brightness = dict(kwargs).get(ATTR_BRIGHTNESS) or self._brightness
-        self.async_schedule_update_ha_state(True)
+        # This is basically a copy of LightGroup::async_turn_on but it has been changed
+        # so we can pass different brightness to each light.
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the lights off."""
+        # List all attributes we want to forward.
+        data = {
+            key: value for key, value in kwargs.items() if key in FORWARDED_ATTRIBUTES
+        }
 
-        self._state = STATE_OFF
-        self.async_schedule_update_ha_state()
+        # Retrieve the brightness being set to the Lightener (or current level if not setting it)
+        brightness = kwargs.get(ATTR_BRIGHTNESS) or self.brightness
 
-    async def async_added_to_hass(self) -> None:
-        async def _async_state_change(ev: Event) -> None:
-            # Do nothing if the change has been triggered when a child entity was changed directly.
-            if ev.context.id == self.context_id or ev.context.id == SIDE_EFFECT_CONTEXT_ID:
-                return
+        for entity in self._entities:
+            # Add entity specific attributes.
+            entity_data = data.copy()
+            entity_data[ATTR_ENTITY_ID] = entity.entity_id
 
-            new_state: State = ev.data.get("new_state")
+            if brightness is not None:
+                entity_data[ATTR_BRIGHTNESS] = entity.translate_brightness(brightness)
 
-            # The event may be fired with empty state when renaming the entity ID. In such case we do nothing.
-            if new_state is not None:
-                # Update the local state with the event one.
-                self._state = new_state.state
-                self._brightness = (
-                    new_state.attributes.get(ATTR_BRIGHTNESS) or self._brightness
-                )
+            if entity_data.get(ATTR_BRIGHTNESS) == 0:
+                current_state = self.hass.states.get(entity.entity_id)
 
-                if new_state.state == STATE_ON:
-                    for entity in self._entities:
-                        await entity.async_turn_on(self._brightness)
+                if current_state is not None and current_state.state == STATE_OFF:
+                    continue
 
-                else:
-                    for entity in self._entities:
-                        await entity.async_turn_off()
-
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass, self.entity_id, _async_state_change
-            )
-        )
-
-        # Track state changes of the child entities and update the lightener state accordingly.
-
-        async def _async_child_state_change(ev: Event) -> None:
-            # Do nothing if the change has been triggered by the lightener.
-            if ev.context.id == self.context_id:
-                return
-
-            service_to_call = SERVICE_TURN_OFF
-
-            if any(entity.state == STATE_ON for entity in self._entities):
-                service_to_call = SERVICE_TURN_ON
-
-            if (service_to_call == SERVICE_TURN_ON and self.state == STATE_ON) or (
-                service_to_call == SERVICE_TURN_OFF and self.state == STATE_OFF
-            ):
-                return
-
-            self.hass.async_create_task(
-                self.hass.services.async_call(
-                    core.DOMAIN,
-                    service_to_call,
-                    {ATTR_ENTITY_ID: self.entity_id},
-                    blocking=True,
-                    context=Context(None, None, SIDE_EFFECT_CONTEXT_ID),
-                )
+            await self.hass.services.async_call(
+                LIGHT_DOMAIN,
+                SERVICE_TURN_ON,
+                entity_data,
+                blocking=True,
+                context=self._context,
             )
 
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass,
-                map(lambda e: e.entity_id, self._entities),
-                _async_child_state_change,
-            )
-        )
+    @callback
+    def async_update_group_state(self) -> None:
+        """Update the Lightener state based on the controlled entities."""
+
+        # Independent changes to the brightness of the controlled entity
+        # should not be set to this lightener.
+        current_brightness = self._attr_brightness
+
+        # Let the Group integration make its magic, which includes recalculating the brightness.
+        super().async_update_group_state()
+
+        # Reset the brightness back. See above comments.
+        self._attr_brightness = current_brightness
+
+        if self._attr_is_on is not True:
+            return
+
+        # Calculates the brighteness by checking if the current levels in al controlled lights
+        # preciselly match one of the possible values for this lightener.
+        levels = []
+        for entity_id in self._entity_ids:
+            state = self.hass.states.get(entity_id)
+
+            # State may return None if the entity is not available, so we ignore it.
+            if state is not None:
+                for entity in self._entities:
+                    if entity.entity_id == state.entity_id:
+                        entity_brightness = state.attributes.get(ATTR_BRIGHTNESS) if state.state == STATE_ON else 0
+                        if entity_brightness is not None:
+                            levels.append(entity.translate_brightness_back(entity_brightness))
+                        else:
+                            levels.append([])
+
+        common_level: set = set.intersection(*map(set, levels)) if levels else None
+
+        if common_level:
+            self._attr_brightness = common_level.pop()
 
 
-class LightenerLightEntity:
+class LightenerControlledLight:
     """Represents a light entity managed by a LightnerLight."""
 
     def __init__(
-        self: LightenerLightEntity,
-        hass: HomeAssistant,
-        parent: LightenerLight,
+        self: LightenerControlledLight,
         entity_id: str,
         config: dict,
     ) -> None:
-        self._entity_id = entity_id
-        self.hass = hass
-        self._parent = parent
+        self.entity_id = entity_id
 
         config_levels = {}
 
@@ -310,11 +231,17 @@ class LightenerLightEntity:
         # Start the level list with value 0 for level 0.
         levels = [0]
 
+        # List with all possible Lightener levels for a given entity level.
+        to_lightener_levels = [[] for i in range(0,256)]
+
         previous_lightener_level = 0
         previous_light_level = 0
 
         # Fill all levels with the calculated values between the ranges.
         for lightener_level, light_level in config_levels.items():
+
+            # Calculate all possible levels between the configured ranges
+            # to be used during translation (lightener -> entity)
             for i in range(previous_lightener_level + 1, lightener_level):
                 value_at_current_level = math.ceil(
                     previous_light_level
@@ -323,80 +250,41 @@ class LightenerLightEntity:
                     / (lightener_level - previous_lightener_level)
                 )
                 levels.append(value_at_current_level)
+                to_lightener_levels[value_at_current_level].append(i)
 
             # To account for rounding, we use the configured values directly.
             levels.append(light_level)
+            to_lightener_levels[light_level].append(lightener_level)
+
+            # Do the reverse calculation for the oposite translation direction (entity -> lightener)
+            for i in range(previous_light_level, light_level, 1 if previous_light_level < light_level else -1):
+                value_at_current_level = math.ceil(
+                    previous_lightener_level
+                    + (lightener_level - previous_lightener_level)
+                    * (i - previous_light_level)
+                    / (light_level - previous_light_level)
+                )
+
+                # Since the same entity level can happen more than once (e.g. "50:100, 100:0") we
+                # create a list with all possible lightener levels at this (i) entity brightness.
+                if value_at_current_level not in to_lightener_levels[i]:
+                    to_lightener_levels[i].append(value_at_current_level)
 
             previous_lightener_level = lightener_level
             previous_light_level = light_level
 
-        self._levels = levels
+        self.levels = levels
+        self.to_lightener_levels = to_lightener_levels
 
-        # Track the entity availability.
-        self._is_available = hass.states.get(self._entity_id) is not None
+    def translate_brightness(self, brightness: int) -> int:
+        """Calculates the entitiy brightness for the give Lightener brightness level."""
 
-        async def _async_state_changed(event: Event) -> None:
-            self._is_available = event.data.get("new_state") is not None
+        return self.levels[brightness]
 
-        parent.async_on_remove(
-            async_track_state_change_event(hass, entity_id, _async_state_changed)
-        )
+    def translate_brightness_back(self, brightness: int) -> list[int]:
+        """Calculates all possible Lightener brightness levels for a give entity brightness."""
 
-        async def _async_check_available(event: Event) -> None:
-            if not self._is_available:
-                _LOGGER.warning(
-                    "Unable to find referenced entity %s or it is currently not available",
-                    entity_id,
-                )
+        if brightness is None:
+            return []
 
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_check_available)
-
-    @property
-    def entity_id(self: LightenerLightEntity) -> str:
-        """The original entity id of this managed entity."""
-
-        return self._entity_id
-
-    @property
-    def state(self: LightenerLightEntity) -> Literal["on", "off"] | None:
-        """The current state of this entity."""
-
-        if not self._is_available:
-            return None
-
-        return self.hass.states.get(self._entity_id).state
-
-    async def async_turn_on(self: LightenerLightEntity, brightness: int) -> None:
-        """Turns the light on or off, according to the lightened configuration for the given brighteness."""
-
-        if not self._is_available:
-            return
-
-        self.hass.async_create_task(
-            self.hass.services.async_call(
-                LIGHT_DOMAIN,
-                SERVICE_TURN_ON,
-                {
-                    ATTR_ENTITY_ID: self._entity_id,
-                    ATTR_BRIGHTNESS: self._levels[brightness],
-                },
-                blocking=True,
-                context=Context(None, None, self._parent.context_id),
-            )
-        )
-
-    async def async_turn_off(self: LightenerLightEntity) -> None:
-        """Turn the light off."""
-
-        if not self._is_available:
-            return
-
-        self.hass.async_create_task(
-            self.hass.services.async_call(
-                LIGHT_DOMAIN,
-                SERVICE_TURN_OFF,
-                {ATTR_ENTITY_ID: self._entity_id},
-                blocking=True,
-                context=Context(None, None, self._parent.context_id),
-            )
-        )
+        return self.to_lightener_levels[brightness]
