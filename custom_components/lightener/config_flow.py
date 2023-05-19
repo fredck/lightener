@@ -123,6 +123,8 @@ class LightenerFlow:
     ) -> FlowResult:
         """Manages the selection of the lights controlled by the Lighetner light."""
 
+        errors = {}
+
         lightener_entities = []
         controlled_entities = []
 
@@ -144,12 +146,16 @@ class LightenerFlow:
             controlled_entities = self.local_data[
                 "controlled_entities"
             ] = user_input.get("controlled_entities")
-            entities = self.data[CONF_ENTITIES] = {}
 
-            for entity in controlled_entities:
-                entities[entity] = {}
+            if not controlled_entities:
+                errors["controlled_entities"] = "controlled_entities_empty"
+            else:
+                entities = self.data[CONF_ENTITIES] = {}
 
-            return await self.async_step_light_configuration()
+                for entity in controlled_entities:
+                    entities[entity] = {}
+
+                return await self.async_step_light_configuration()
 
         return self.flow_handler.async_show_form(
             step_id=self.steps.get("lights", "lights"),
@@ -169,6 +175,7 @@ class LightenerFlow:
                     )
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_light_configuration(

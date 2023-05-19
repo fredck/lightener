@@ -26,6 +26,10 @@
           "brightness": "A list mapping the brightness of this light when the Lightener reaches certain brightness levels. Each line has the format (Lightner brightness %): (Controlled light brightness %). For example, \"60:100\" specifies that when the Lightener reaches 60% of brightness \"{light_name}\" will reach 100%"
         }
       }
+    },
+    "error": {
+      "controlled_entities_empty": "Select at least one light",
+      "invalid_brightness": "Invalid brightness mapping configuration \"{error_entry}\". Each line must have the format \"(number from 1 to 100): (number from 0 to 100)\". For example \"40: 100\""
     }
   },
   "options": {
@@ -47,6 +51,7 @@
       }
     },
     "error": {
+      "controlled_entities_empty": "Select at least one light",
       "invalid_brightness": "Invalid brightness mapping configuration \"{error_entry}\". Each line must have the format \"(number from 1 to 100): (number from 0 to 100)\". For example \"40: 100\""
     }
   }
