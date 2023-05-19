@@ -62,7 +62,6 @@ async def test_config_flow_steps(hass: HomeAssistant) -> None:
         CONF_ENTITIES: {"light.test1": {CONF_BRIGHTNESS: {"10": "20"}}},
     }
 
-
 async def test_options_flow_steps(hass: HomeAssistant) -> None:
     """Test if the full options flow works"""
 
@@ -113,7 +112,6 @@ async def test_options_flow_steps(hass: HomeAssistant) -> None:
 
     assert entry.options == {}
 
-
 async def test_step_lights_no_lightener(hass: HomeAssistant) -> None:
     """Test if the list of lights to select doesn't include the lightener being configured"""
 
@@ -137,6 +135,24 @@ async def test_step_lights_no_lightener(hass: HomeAssistant) -> None:
     result = await hass.config_entries.options.async_init(entry.entry_id)
 
     assert get_default(result, "controlled_entities") == ["light.test1"]
+
+async def test_step_lights_error_no_selection(hass: HomeAssistant) -> None:
+    """Test if the list of lights to select doesn't include the lightener being configured"""
+
+    result = await hass.config_entries.flow.async_init(
+        const.DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"name": "Test Name"}
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"controlled_entities": []},
+    )
+
+    assert result["step_id"] == "lights"
+    assert result["errors"]["controlled_entities"] == "controlled_entities_empty"
 
 
 async def test_step_light_configuration_multiple_lights(hass: HomeAssistant) -> None:
