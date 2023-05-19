@@ -5,7 +5,6 @@ from uuid import uuid4
 
 from homeassistant.components.light import ATTR_BRIGHTNESS
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.components.light import ColorMode
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     SERVICE_TURN_OFF,
@@ -14,10 +13,14 @@ from homeassistant.const import (
     STATE_ON,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_component import EntityComponent
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lightener.light import (
     LightenerLight,
-    LightenerLightEntity,
+    LightenerControlledLight,
+    DOMAIN,
     _convert_percent_to_brightness,
     async_setup_platform,
 )
@@ -32,12 +35,9 @@ async def test_lightener_light_properties(hass):
     config = {"friendly_name": "Living Room"}
     unique_id = str(uuid4())
 
-    lightener = LightenerLight(hass, config, unique_id)
+    lightener = LightenerLight(config, unique_id)
 
     assert lightener.unique_id == unique_id
-    assert lightener.entity_id == "light.living_room"
-    assert lightener.is_on is False
-    assert lightener.brightness == 255
 
     # Name must be empty so it'll be taken from the device
     assert lightener.name is None
@@ -46,8 +46,6 @@ async def test_lightener_light_properties(hass):
     assert lightener.should_poll is False
     assert lightener.has_entity_name is True
 
-    assert lightener.color_mode == ColorMode.BRIGHTNESS
-    assert lightener.supported_color_modes == {ColorMode.BRIGHTNESS}
     assert lightener.icon == "mdi:lightbulb-group"
 
 
@@ -56,235 +54,307 @@ async def test_lightener_light_properties_no_unique_id(hass):
 
     config = {"friendly_name": "Living Room"}
 
-    lightener = LightenerLight(hass, config)
+    lightener = LightenerLight(config)
 
     assert lightener.unique_id is None
-
-    # Name must exist since no device will be available for this entity
-    assert lightener.name == "Living Room"
     assert lightener.device_info is None
+    assert lightener.name == "Living Room"
 
 
-async def test_lightener_light_turn_on(hass: HomeAssistant):
+async def test_lightener_light_turn_on(hass: HomeAssistant, create_lightener):
     """Test the state changes of the LightenerLight class when turned on"""
 
-    config = {"friendly_name": "Living Room"}
+    lightener: LightenerLight = await create_lightener(config={
+            "friendly_name": "Test",
+            "entities": {
+                "light.test1": {},
+                "light.test2": {},
+            }
+        }
+    )
 
-    lightener = LightenerLight(hass, config)
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on()
 
-    await lightener.async_turn_on()
+    assert async_call_mock.call_count == 2
 
-    assert lightener.state == STATE_ON
+    async_call_mock.assert_any_call(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {ATTR_ENTITY_ID: "light.test1"},
+        blocking=True,
+        context=ANY,
+    )
 
-    await hass.async_block_till_done()
+    async_call_mock.assert_any_call(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {ATTR_ENTITY_ID: "light.test2"},
+        blocking=True,
+        context=ANY,
+    )
 
-    state = hass.states.get(lightener.entity_id)
-    assert state.state == STATE_ON
-    assert state.attributes[ATTR_BRIGHTNESS] == 255
+async def test_lightener_light_turn_on_forward(hass: HomeAssistant, create_lightener):
+    """Test if passed arguments are forwared when turned on"""
 
+    lightener: LightenerLight = await create_lightener()
 
-async def test_lightener_light_turn_on_brightness(hass: HomeAssistant):
-    """Test the brightness changes of the LightenerLight class when turned on"""
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on(
+            brightness=50,
+            effect="blink",
+            color_temp_kelvin=3000
+        )
 
-    config = {"friendly_name": "Living Room"}
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {
+            ATTR_ENTITY_ID: "light.test1",
+            'brightness': 50,
+            'effect': 'blink',
+            'color_temp_kelvin': 3000,
+        },
+        blocking=True,
+        context=ANY,
+    )
 
-    lightener = LightenerLight(hass, config)
+async def test_lightener_light_turn_on_own_brightness(hass: HomeAssistant, create_lightener):
+    """Test brightness is sent"""
 
-    await lightener.async_turn_on(brightness=150)
+    lightener: LightenerLight = await create_lightener()
+    lightener._attr_brightness = 20     # pylint: disable=protected-access
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on(brightness=50)
+
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {
+            ATTR_ENTITY_ID: "light.test1",
+            'brightness': 50,
+        },
+        blocking=True,
+        context=ANY,
+    )
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on()
+
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {
+            ATTR_ENTITY_ID: "light.test1",
+            'brightness': 20,
+        },
+        blocking=True,
+        context=ANY,
+    )
+
+async def test_lightener_light_turn_on_do_nothing_if_off(hass: HomeAssistant, create_lightener):
+    """Test that turned on does nothing if the controlled light is already off"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {
+                "50": "0"
+            },
+            "light.test2": {}
+        },
+    })
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on(brightness=1)
+
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {
+            ATTR_ENTITY_ID: "light.test2",
+            'brightness': 1,
+        },
+        blocking=True,
+        context=ANY,
+    )
+
+async def test_lightener_light_turn_on_go_off_if_brightness_0(hass: HomeAssistant, create_lightener):
+    """Test that turned on sends brightness 0 if the controlled light is on"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {
+                "50": "0"
+            }
+        },
+    })
+
+    hass.states.async_set(entity_id="light.test1", new_state="on")
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on(brightness=1)
+
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_ON,
+        {
+            ATTR_ENTITY_ID: "light.test1",
+            'brightness': 0,
+        },
+        blocking=True,
+        context=ANY,
+    )
+
+async def test_lightener_light_async_update_group_state(hass: HomeAssistant, create_lightener):
+    """Test that turned on does nothing if the controlled light is already off"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {
+                "50": "0"
+            }
+        },
+    })
+
+    lightener._attr_brightness = 150    # pylint: disable=protected-access
+
+    hass.states.async_set(entity_id="light.test1", new_state="on",
+        attributes={
+            'color_temp_kelvin': 3000
+        })
+
+    lightener.async_update_group_state()
+
+    assert lightener.is_on is True
+    assert lightener.color_temp_kelvin == 3000
+
     assert lightener.brightness == 150
 
-    await hass.async_block_till_done()
+    hass.states.async_set(entity_id="light.test1", new_state="on",
+        attributes={
+            'brightness': 255
+        })
 
-    state = hass.states.get(lightener.entity_id)
-    assert state.attributes[ATTR_BRIGHTNESS] == 150
+    lightener.async_update_group_state()
 
+    assert lightener.brightness == 255
 
-async def test_lightener_light_turn_off(hass: HomeAssistant):
-    """Test the state changes of the LightenerLight class when turned off"""
+    hass.states.async_set(entity_id="light.test1", new_state="on",
+        attributes={
+            'brightness': 1
+        })
 
-    config = {"friendly_name": "Living Room"}
+    lightener.async_update_group_state()
 
-    lightener = LightenerLight(hass, config)
+    assert lightener.brightness == 129
 
-    await lightener.async_turn_on()
-    await hass.async_block_till_done()
-    await lightener.async_turn_off()
+    hass.states.async_set(entity_id="light.test1", new_state="on",
+        attributes={
+            'brightness': 0
+        })
 
-    assert lightener.state == STATE_OFF
+    lightener.async_update_group_state()
 
-    await hass.async_block_till_done()
+    assert lightener.is_on is True
+    assert lightener.brightness == 1
 
-    state = hass.states.get(lightener.entity_id)
-    assert state.state == STATE_OFF
+async def test_lightener_light_async_update_group_state_zero(hass: HomeAssistant, create_lightener):
+    """Test that turned on does nothing if the controlled light is already off"""
 
-
-async def test_lightener_light_on_state_change(hass: HomeAssistant):
-    """Test the state changes of the LightenerLight class when turned off"""
-
-    config = {"friendly_name": "Living Room"}
-
-    lightener = LightenerLight(hass, config)
-    await lightener.async_added_to_hass()
-
-    await lightener.async_turn_off()
-    await hass.async_block_till_done()
-
-    hass.states.async_set(lightener.entity_id, STATE_ON, {"brightness": 120})
-    await hass.async_block_till_done()
-
-    assert lightener.state == STATE_ON
-    assert lightener.brightness == 120
-
-
-async def test_lightener_light_cross_controll(hass: HomeAssistant):
-    """Test Lightener controlling other Lighteners"""
-
-    lightener1 = LightenerLight(
-        hass,
-        {
-            "friendly_name": "Lightener1",
-            "entities": {
-                "light.test1": {"brightness": {}},
-                "light.test2": {"brightness": {}},
-            },
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {}
         },
-    )
-    await lightener1.async_added_to_hass()
+    })
 
-    lightener2 = LightenerLight(
-        hass,
-        {
-            "friendly_name": "Lightener2",
-            "entities": {
-                "light.test1": {"brightness": {}},
-                "light.lightener1": {"brightness": {}},
-            },
+    lightener._attr_brightness = 150    # pylint: disable=protected-access
+
+    hass.states.async_set(entity_id="light.test1", new_state="on",
+        attributes={
+            'brightness': 0
+        })
+
+    lightener.async_update_group_state()
+
+    assert lightener.brightness == 0
+
+async def test_lightener_light_async_update_group_state_unavailable(hass: HomeAssistant, create_lightener):
+    """Test that turned on does nothing if the controlled light is already off"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {"50": "0"},
+            "light.I_DONT_EXIST": {}
         },
-    )
-    await lightener2.async_added_to_hass()
+    })
 
-    lightener3 = LightenerLight(
-        hass,
-        {
-            "friendly_name": "Lightener3",
-            "entities": {
-                "light.lightener1": {"brightness": {}},
-                "light.lightener2": {"brightness": {}},
-            },
+    lightener._attr_brightness = 150    # pylint: disable=protected-access
+
+    hass.states.async_set(entity_id="light.test1", new_state="on",
+        attributes={
+            'brightness': 1
+        })
+
+    lightener.async_update_group_state()
+
+    assert lightener.brightness == 129
+
+async def test_lightener_light_async_update_group_state_no_match_no_change(hass: HomeAssistant, create_lightener):
+    """Test that turned on does nothing if the controlled light is already off"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {"50": "0"},
+            "light.test2": {"10": "100"}
         },
-    )
-    await lightener3.async_added_to_hass()
+    })
 
-    await lightener1.async_turn_off()
-    await lightener2.async_turn_off()
-    await lightener3.async_turn_off()
+    def test(test1: int, test2: int, result: int):
+        lightener._attr_brightness = 150    # pylint: disable=protected-access
 
-    await hass.async_block_till_done()
+        hass.states.async_set(entity_id="light.test1", new_state="on",
+            attributes={'brightness': test1})
 
-    with patch.object(hass.services, "async_call") as async_call_mock:
-        await lightener1.async_turn_on()
-        await hass.async_block_till_done()
+        hass.states.async_set(entity_id="light.test2", new_state="on",
+            attributes={'brightness': test2})
 
-    # [0] -> light.test1 for light.lightener1
-    # [1] -> light.test2 for light.lightener1
-    # [2] -> light.test1 for light.lightener2
-    # [3] -> light.lightener1 from for light.lightener3
-    assert async_call_mock.call_count == 4
+        lightener.async_update_group_state()
 
-    assert async_call_mock.mock_calls[0].args[2]["entity_id"] == "light.test1"
-    assert async_call_mock.mock_calls[1].args[2]["entity_id"] == "light.test2"
-    assert async_call_mock.mock_calls[2].args[2]["entity_id"] == "light.lightener2"
-    assert async_call_mock.mock_calls[3].args[2]["entity_id"] == "light.lightener3"
+        assert lightener.brightness == result
 
-async def test_lightener_light_cross_controll2(hass: HomeAssistant):
-    """Test Lightener controlling other Lighteners"""
+    # Matches
+    test(0, 26, 3)
+    test(1, 255, 129)
 
-    lightener1 = LightenerLight(
-        hass,
-        {
-            "friendly_name": "Lightener1",
-            "entities": {
-                "light.test1": {"brightness": {}},
-                "light.test2": {"brightness": {}},
-            },
-        },
-    )
-    await lightener1.async_added_to_hass()
-
-    lightener2 = LightenerLight(
-        hass,
-        {
-            "friendly_name": "Lightener2",
-            "entities": {
-                "light.test1": {"brightness": {}},
-                "light.lightener1": {"brightness": {}},
-            },
-        },
-    )
-    await lightener2.async_added_to_hass()
-
-    lightener3 = LightenerLight(
-        hass,
-        {
-            "friendly_name": "Lightener3",
-            "entities": {
-                "light.lightener1": {"brightness": {}},
-                "light.lightener2": {"brightness": {}},
-            },
-        },
-    )
-    await lightener3.async_added_to_hass()
-
-    await lightener1.async_turn_off()
-    await lightener2.async_turn_off()
-    await lightener3.async_turn_off()
-
-    await hass.async_block_till_done()
-
-    with patch.object(hass.services, "async_call") as async_call_mock:
-        await lightener2.async_turn_on()
-        await hass.async_block_till_done()
-
-    # assert async_call_mock.call_count == 4
-
-    assert async_call_mock.mock_calls[0].args[2]["entity_id"] == "light.test1"
-    assert async_call_mock.mock_calls[1].args[2]["entity_id"] == "light.lightener1"
-    assert async_call_mock.mock_calls[2].args[2]["entity_id"] == "light.lightener3"
-    # assert async_call_mock.mock_calls[3].args[2]["entity_id"] == "light.test2"
+    # No matches
+    test(129, 1, 150)
+    test(1, 254, 150)
+    test(1, 1, 150)
+    test(1, None, 150)
 
 ###########################################################
-### LightenerLightEntity class only tests
-
+### LightenerControlledLight class only tests
 
 async def test_lightener_light_entity_properties(hass):
     """Test all the basic properties of the LightenerLight class"""
 
-    config = {"friendly_name": "Living Room"}
-    unique_id = str(uuid4())
-
-    lightener = LightenerLight(hass, config, unique_id)
-
-    light = LightenerLightEntity(
-        hass, lightener, "light.test1", {"brightness": {"10": "20"}}
+    light = LightenerControlledLight(
+        "light.test1", {"brightness": {"10": "20"}}
     )
 
     assert light.entity_id == "light.test1"
-    assert light.state == "off"
-
 
 async def test_lightener_light_entity_calculated_levels(hass):
     """Test the calculation of brigthness levels"""
 
-    # pylint: disable=W0212
-
-    config = {"friendly_name": "Living Room"}
-    unique_id = str(uuid4())
-
-    lightener = LightenerLight(hass, config, unique_id)
-
-    light = LightenerLightEntity(
-        hass,
-        lightener,
+    light = LightenerControlledLight(
         "light.test1",
         {
             "brightness": {
@@ -293,17 +363,15 @@ async def test_lightener_light_entity_calculated_levels(hass):
         },
     )
 
-    assert light._levels[0] == 0
-    assert light._levels[13] == 128
-    assert light._levels[25] == 246
-    assert light._levels[26] == 255
-    assert light._levels[27] == 255
-    assert light._levels[100] == 255
-    assert light._levels[255] == 255
+    assert light.levels[0] == 0
+    assert light.levels[13] == 128
+    assert light.levels[25] == 246
+    assert light.levels[26] == 255
+    assert light.levels[27] == 255
+    assert light.levels[100] == 255
+    assert light.levels[255] == 255
 
-    light = LightenerLightEntity(
-        hass,
-        lightener,
+    light = LightenerControlledLight(
         "light.test1",
         {
             "brightness": {
@@ -314,63 +382,50 @@ async def test_lightener_light_entity_calculated_levels(hass):
         },
     )
 
-    assert light._levels[0] == 0
-    assert light._levels[15] == 15
-    assert light._levels[26] == 26
-    assert light._levels[27] == 29
-    assert light._levels[128] == 255
-    assert light._levels[129] == 253
-    assert light._levels[255] == 0
+    assert light.levels[0] == 0
+    assert light.levels[15] == 15
+    assert light.levels[26] == 26
+    assert light.levels[27] == 29
+    assert light.levels[128] == 255
+    assert light.levels[129] == 253
+    assert light.levels[255] == 0
 
+async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
+    """Test the calculation of brigthness levels"""
 
-async def test_lightener_light_entity_turn_on(hass: HomeAssistant):
-    """Test the turn on of LightenerLightEntity"""
-
-    config = {"friendly_name": "Living Room"}
-
-    lightener = LightenerLight(hass, config, str(uuid4()))
-
-    light = LightenerLightEntity(
-        hass, lightener, "light.test1", {"brightness": {"50": "100"}}
-    )
-
-    with patch.object(hass.services, "async_call") as async_call_mock:
-        await light.async_turn_on(_convert_percent_to_brightness(25))
-
-    async_call_mock.assert_called_once_with(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_ON,
+    light = LightenerControlledLight(
+        "light.test1",
         {
-            ATTR_ENTITY_ID: "light.test1",
-            ATTR_BRIGHTNESS: _convert_percent_to_brightness(50),
+            "brightness": {
+                "10": "100" # 26: 255
+            }
         },
-        blocking=True,
-        context=ANY,
     )
 
+    assert light.to_lightener_levels[0] == [0]
+    assert light.to_lightener_levels[26] == [3]
+    assert light.to_lightener_levels[253] == [26]
+    assert light.to_lightener_levels[254] == [26]
+    assert light.to_lightener_levels[255] == list(range(26,256))
 
-async def test_lightener_light_entity_turn_off(hass: HomeAssistant):
-    """Test the turn on of LightenerLightEntity"""
 
-    config = {"friendly_name": "Living Room"}
-
-    lightener = LightenerLight(hass, config, str(uuid4()))
-
-    light = LightenerLightEntity(
-        hass, lightener, "light.test1", {"brightness": {"50": "100"}}
+    light = LightenerControlledLight(
+        "light.test1",
+        {
+            "brightness": {
+                "100": "0",  # Test the ordering
+                "10": "10",
+                "50": "100",
+            }
+        },
     )
 
-    with patch.object(hass.services, "async_call") as async_call_mock:
-        await light.async_turn_off()
+    assert light.to_lightener_levels[0] == [0,255]
+    assert light.to_lightener_levels[26] == [26,243]
+    assert light.to_lightener_levels[255] == [128]
 
-    async_call_mock.assert_called_once_with(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_OFF,
-        {ATTR_ENTITY_ID: "light.test1"},
-        blocking=True,
-        context=ANY,
-    )
-
+    assert light.to_lightener_levels[3] == [3,254]
+    assert light.to_lightener_levels[10] == [10, 251]
 
 ###########################################################
 ### Other
@@ -416,25 +471,24 @@ async def test_async_setup_platform(hass):
     light: LightenerLight = created_lights[0]
 
     assert isinstance(light, LightenerLight)
-    assert light.entity_id == "light.lightener_1"
     assert light.name == "Lightener 1"
     assert len(light._entities) == 1
 
-    controlled_light: LightenerLightEntity = light._entities[0]
+    controlled_light: LightenerControlledLight = light._entities[0]
 
-    assert isinstance(controlled_light, LightenerLightEntity)
+    assert isinstance(controlled_light, LightenerControlledLight)
     assert controlled_light.entity_id == "light.test1"
-    assert controlled_light._levels[26] == 255
+    assert controlled_light.levels[26] == 255
 
     light: LightenerLight = created_lights[1]
 
     assert isinstance(light, LightenerLight)
-    assert light.entity_id == "light.lightener_2"
     assert light.name == "Lightener 2"
     assert len(light._entities) == 1
 
-    controlled_light: LightenerLightEntity = light._entities[0]
+    controlled_light: LightenerControlledLight = light._entities[0]
 
-    assert isinstance(controlled_light, LightenerLightEntity)
+    assert isinstance(controlled_light, LightenerControlledLight)
+    assert light.extra_state_attributes["entity_id"][0] == "light.test2"
     assert controlled_light.entity_id == "light.test2"
-    assert controlled_light._levels[255] == 26
+    assert controlled_light.levels[255] == 26
