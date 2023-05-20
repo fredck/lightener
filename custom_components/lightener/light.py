@@ -144,7 +144,7 @@ class LightenerLight(LightGroup):
         }
 
         # Retrieve the brightness being set to the Lightener (or current level if not setting it)
-        brightness = kwargs.get(ATTR_BRIGHTNESS) or self.brightness
+        brightness = kwargs.get(ATTR_BRIGHTNESS)
 
         for entity in self._entities:
             # Add entity specific attributes.
@@ -154,17 +154,11 @@ class LightenerLight(LightGroup):
             if brightness is not None:
                 entity_data[ATTR_BRIGHTNESS] = entity.translate_brightness(brightness)
 
-            if entity_data.get(ATTR_BRIGHTNESS) == 0:
-                current_state = self.hass.states.get(entity.entity_id)
-
-                if current_state is not None and current_state.state == STATE_OFF:
-                    continue
-
             await self.hass.services.async_call(
                 LIGHT_DOMAIN,
                 SERVICE_TURN_ON,
                 entity_data,
-                blocking=True,
+                blocking=False,
                 context=self._context,
             )
 
@@ -172,18 +166,11 @@ class LightenerLight(LightGroup):
     def async_update_group_state(self) -> None:
         """Update the Lightener state based on the controlled entities."""
 
-        # Independent changes to the brightness of the controlled entity
-        # should not be set to this lightener.
+        # Store the current brightness so we can eventually restore it later in the code.
         current_brightness = self._attr_brightness
 
         # Let the Group integration make its magic, which includes recalculating the brightness.
         super().async_update_group_state()
-
-        # Reset the brightness back. See above comments.
-        self._attr_brightness = current_brightness
-
-        if self._attr_is_on is not True:
-            return
 
         # Calculates the brighteness by checking if the current levels in al controlled lights
         # preciselly match one of the possible values for this lightener.
@@ -205,6 +192,10 @@ class LightenerLight(LightGroup):
 
         if common_level:
             self._attr_brightness = common_level.pop()
+        else:
+            # Do not change the brightness if there is no match for it.
+            self._attr_brightness = current_brightness
+
 
 
 class LightenerControlledLight:
