@@ -279,7 +279,7 @@ class LightenerControlledLight:
     def translate_brightness(self, brightness: int) -> int:
         """Calculates the entitiy brightness for the give Lightener brightness level."""
 
-        return self.levels[brightness]
+        return self.levels[int(brightness)]
 
     def translate_brightness_back(self, brightness: int) -> list[int]:
         """Calculates all possible Lightener brightness levels for a give entity brightness."""
@@ -287,4 +287,4 @@ class LightenerControlledLight:
         if brightness is None:
             return []
 
-        return self.to_lightener_levels[brightness]
+        return self.to_lightener_levels[int(brightness)]

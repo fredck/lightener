@@ -427,6 +427,34 @@ async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
     assert light.to_lightener_levels[3] == [3,254]
     assert light.to_lightener_levels[10] == [10, 251]
 
+async def test_lightener_light_entity_translate_brightness_float(hass):
+    """Test translate_brightness_back with float values"""
+
+    light = LightenerControlledLight(
+        "light.test1",
+        {
+            "brightness": {
+                "10": "100" # 26: 255
+            }
+        },
+    )
+
+    assert light.translate_brightness(2.9) == 20
+
+async def test_lightener_light_entity_translate_brightness_back_float(hass):
+    """Test translate_brightness_back with float values"""
+
+    light = LightenerControlledLight(
+        "light.test1",
+        {
+            "brightness": {
+                "10": "100" # 26: 255
+            }
+        },
+    )
+
+    assert light.translate_brightness_back(25.9) == [3]
+
 ###########################################################
 ### Other
 
