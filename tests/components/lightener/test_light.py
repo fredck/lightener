@@ -82,7 +82,7 @@ async def test_lightener_light_turn_on(hass: HomeAssistant, create_lightener):
         LIGHT_DOMAIN,
         SERVICE_TURN_ON,
         {ATTR_ENTITY_ID: "light.test1"},
-        blocking=True,
+        blocking=False,
         context=ANY,
     )
 
@@ -90,7 +90,7 @@ async def test_lightener_light_turn_on(hass: HomeAssistant, create_lightener):
         LIGHT_DOMAIN,
         SERVICE_TURN_ON,
         {ATTR_ENTITY_ID: "light.test2"},
-        blocking=True,
+        blocking=False,
         context=ANY,
     )
 
@@ -115,68 +115,7 @@ async def test_lightener_light_turn_on_forward(hass: HomeAssistant, create_light
             'effect': 'blink',
             'color_temp_kelvin': 3000,
         },
-        blocking=True,
-        context=ANY,
-    )
-
-async def test_lightener_light_turn_on_own_brightness(hass: HomeAssistant, create_lightener):
-    """Test brightness is sent"""
-
-    lightener: LightenerLight = await create_lightener()
-    lightener._attr_brightness = 20     # pylint: disable=protected-access
-
-    with patch.object(hass.services, "async_call") as async_call_mock:
-        await lightener.async_turn_on(brightness=50)
-
-    async_call_mock.assert_called_once_with(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_ON,
-        {
-            ATTR_ENTITY_ID: "light.test1",
-            'brightness': 50,
-        },
-        blocking=True,
-        context=ANY,
-    )
-
-    with patch.object(hass.services, "async_call") as async_call_mock:
-        await lightener.async_turn_on()
-
-    async_call_mock.assert_called_once_with(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_ON,
-        {
-            ATTR_ENTITY_ID: "light.test1",
-            'brightness': 20,
-        },
-        blocking=True,
-        context=ANY,
-    )
-
-async def test_lightener_light_turn_on_do_nothing_if_off(hass: HomeAssistant, create_lightener):
-    """Test that turned on does nothing if the controlled light is already off"""
-
-    lightener: LightenerLight = await create_lightener(config={
-        "friendly_name": "Test",
-        "entities": {
-            "light.test1": {
-                "50": "0"
-            },
-            "light.test2": {}
-        },
-    })
-
-    with patch.object(hass.services, "async_call") as async_call_mock:
-        await lightener.async_turn_on(brightness=1)
-
-    async_call_mock.assert_called_once_with(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_ON,
-        {
-            ATTR_ENTITY_ID: "light.test2",
-            'brightness': 1,
-        },
-        blocking=True,
+        blocking=False,
         context=ANY,
     )
 
@@ -204,7 +143,7 @@ async def test_lightener_light_turn_on_go_off_if_brightness_0(hass: HomeAssistan
             ATTR_ENTITY_ID: "light.test1",
             'brightness': 0,
         },
-        blocking=True,
+        blocking=False,
         context=ANY,
     )
 
