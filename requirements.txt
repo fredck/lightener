@@ -4,7 +4,7 @@ pip>=21.0,<23.2
 ruff==0.0.270
 
 # For tests
-coverage==7.2.6
+coverage==7.2.7
 pytest
 pytest-asyncio
 pytest-cov
