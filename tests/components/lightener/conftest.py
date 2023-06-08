@@ -7,6 +7,7 @@ import pytest
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import async_get_platforms
+from homeassistant.components.light import ColorMode
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -21,8 +22,9 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 async def register_test_lights(hass: HomeAssistant):
     """Register test lights used in tests"""
 
-    hass.states.async_set(entity_id="light.test1", new_state="off")
-    hass.states.async_set(entity_id="light.test2", new_state="off")
+    hass.states.async_set(entity_id="light.test1", new_state="off", attributes={"supported_color_modes": [ColorMode.BRIGHTNESS]})
+    hass.states.async_set(entity_id="light.test2", new_state="off", attributes={"supported_color_modes": [ColorMode.BRIGHTNESS]})
+    hass.states.async_set(entity_id="light.test_onoff", new_state="off", attributes={"supported_color_modes": [ColorMode.ONOFF]})
 
 @pytest.fixture
 async def create_lightener(hass: HomeAssistant) -> Callable[[str, dict], LightenerLight]:

@@ -13,6 +13,14 @@ logger:
 light:
   - platform: template
     lights:
+      on_off_light_1:
+        friendly_name: "ON-OFF Light 1"
+        turn_on:
+        turn_off:
+      on_off_light_2:
+        friendly_name: "ON-OFF Light 2"
+        turn_on:
+        turn_off:
       living_room_ceiling:
         friendly_name: "Living Room Ceiling Lights"
         turn_on:
