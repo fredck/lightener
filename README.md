@@ -76,6 +76,14 @@ Once the configuration is confirmed a new device becomes available and it can be
 
 One light to rule them all!
 
+### Support for On/Off Lights
+
+Lightner supports controlling the so-called "On/Off Lights." These are lights that cannot be dimmed but can only be turned on and off.
+
+The configuration of On/Off Lights is similar to dimmable lights. The difference is that if the light is set to zero, it will be off. Any other "brightness" level will simply turn the light on.
+
+For example, if an On/Off Light is configured with "20:0, 50:30, 100:0," it will be set to off when the Lightner is in the brightness range of 0-20% or when it reaches 100%. Between 21-99%, the light will be on.
+
 ### Tips
 
  * A light doesn't have to go always to 100%. If you want it to not cross (e.g.) 80%, just configure it with `100:80`.
