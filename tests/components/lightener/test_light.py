@@ -3,27 +3,19 @@
 from unittest.mock import ANY, Mock, patch
 from uuid import uuid4
 
-from homeassistant.components.light import ATTR_BRIGHTNESS
+import pytest
+from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_TRANSITION
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.const import (
-    ATTR_ENTITY_ID,
-    SERVICE_TURN_OFF,
-    SERVICE_TURN_ON,
-    STATE_OFF,
-    STATE_ON,
-)
+from homeassistant.components.light import ColorMode
+from homeassistant.const import (ATTR_ENTITY_ID, SERVICE_TURN_OFF,
+                                 SERVICE_TURN_ON)
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_component import EntityComponent
-from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.lightener.light import (
-    LightenerLight,
-    LightenerControlledLight,
-    DOMAIN,
-    _convert_percent_to_brightness,
-    async_setup_platform,
-)
+from custom_components.lightener.const import TYPE_DIMMABLE, TYPE_ONOFF
+from custom_components.lightener.light import (LightenerControlledLight,
+                                               LightenerLight,
+                                               _convert_percent_to_brightness,
+                                               async_setup_platform)
 
 ###########################################################
 ### LightenerLight class only tests
@@ -35,7 +27,7 @@ async def test_lightener_light_properties(hass):
     config = {"friendly_name": "Living Room"}
     unique_id = str(uuid4())
 
-    lightener = LightenerLight(config, unique_id)
+    lightener = LightenerLight(hass, config, unique_id)
 
     assert lightener.unique_id == unique_id
 
@@ -54,7 +46,7 @@ async def test_lightener_light_properties_no_unique_id(hass):
 
     config = {"friendly_name": "Living Room"}
 
-    lightener = LightenerLight(config)
+    lightener = LightenerLight(hass, config)
 
     assert lightener.unique_id is None
     assert lightener.device_info is None
@@ -138,10 +130,66 @@ async def test_lightener_light_turn_on_go_off_if_brightness_0(hass: HomeAssistan
 
     async_call_mock.assert_called_once_with(
         LIGHT_DOMAIN,
+        SERVICE_TURN_OFF,
+        {
+            ATTR_ENTITY_ID: "light.test1"
+        },
+        blocking=False,
+        context=ANY,
+    )
+
+
+async def test_lightener_light_turn_on_translate_brightness(hass: HomeAssistant, create_lightener):
+    """Test that turned on sends brightness 0 if the controlled light is on"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {
+                "50": "0"
+            }
+        },
+    })
+
+    hass.states.async_set(entity_id="light.test1", new_state="on")
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on(brightness=192)
+
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
         SERVICE_TURN_ON,
         {
             ATTR_ENTITY_ID: "light.test1",
-            'brightness': 0,
+            ATTR_BRIGHTNESS: 129
+        },
+        blocking=False,
+        context=ANY,
+    )
+
+async def test_lightener_light_turn_on_go_off_if_brightness_0_transition(hass: HomeAssistant, create_lightener):
+    """Test that turned on sends brightness 0 if the controlled light is on"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {
+                "50": "0"
+            }
+        },
+    })
+
+    hass.states.async_set(entity_id="light.test1", new_state="on")
+
+    with patch.object(hass.services, "async_call") as async_call_mock:
+        await lightener.async_turn_on(brightness=1, transition=10)
+
+    async_call_mock.assert_called_once_with(
+        LIGHT_DOMAIN,
+        SERVICE_TURN_OFF,
+        {
+            ATTR_ENTITY_ID: "light.test1",
+            ATTR_TRANSITION: 10
         },
         blocking=False,
         context=ANY,
@@ -171,7 +219,7 @@ async def test_lightener_light_async_update_group_state(hass: HomeAssistant, cre
     assert lightener.is_on is True
     assert lightener.color_temp_kelvin == 3000
 
-    assert lightener.brightness == 150
+    assert lightener.brightness == 255
 
     hass.states.async_set(entity_id="light.test1", new_state="on",
         attributes={
@@ -278,6 +326,57 @@ async def test_lightener_light_async_update_group_state_no_match_no_change(hass:
     test(1, 1, 150)
     test(1, None, 150)
 
+@pytest.mark.parametrize("test1, current, result", [
+    (0, 10, 10),
+    (0, 20, 20),
+
+    # We're in the range, so the change must happen here.
+    (128, 20, 141),
+
+    (255, 200, 200),
+    (255, 255, 255)
+])
+async def test_lightener_light_async_update_group_state_current_good_no_change(test1, current, result, hass: HomeAssistant, create_lightener):
+    """Test that turned on does nothing if the controlled light is already off"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test1": {"50": "0", "60": "100"}
+        },
+    })
+
+    lightener._attr_brightness = current    # pylint: disable=protected-access
+
+    hass.states.async_set(entity_id="light.test1", new_state="on",
+        attributes={'brightness': test1})
+
+    lightener.async_update_group_state()
+
+    assert lightener.brightness == result
+
+async def test_lightener_light_async_update_group_state_onoff(hass: HomeAssistant, create_lightener):
+    """Test that turned on does nothing if the controlled light is already off"""
+
+    lightener: LightenerLight = await create_lightener(config={
+        "friendly_name": "Test",
+        "entities": {
+            "light.test_onoff": {}
+        },
+    })
+
+    # lightener._attr_brightness = 150    # pylint: disable=protected-access
+
+    hass.states.async_set(entity_id="light.test_onoff", new_state="on",
+        attributes={
+            'color_mode': ColorMode.ONOFF
+        })
+
+    lightener.async_update_group_state()
+
+    assert lightener.color_mode == ColorMode.BRIGHTNESS
+    assert lightener.supported_color_modes == {ColorMode.BRIGHTNESS}
+
 ###########################################################
 ### LightenerControlledLight class only tests
 
@@ -285,7 +384,7 @@ async def test_lightener_light_entity_properties(hass):
     """Test all the basic properties of the LightenerLight class"""
 
     light = LightenerControlledLight(
-        "light.test1", {"brightness": {"10": "20"}}
+        "light.test1", {"brightness": {"10": "20"}}, hass
     )
 
     assert light.entity_id == "light.test1"
@@ -300,6 +399,7 @@ async def test_lightener_light_entity_calculated_levels(hass):
                 "10": "100",
             }
         },
+        hass,
     )
 
     assert light.levels[0] == 0
@@ -319,6 +419,7 @@ async def test_lightener_light_entity_calculated_levels(hass):
                 "50": "100",
             }
         },
+        hass,
     )
 
     assert light.levels[0] == 0
@@ -339,6 +440,7 @@ async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
                 "10": "100" # 26: 255
             }
         },
+        hass,
     )
 
     assert light.to_lightener_levels[0] == [0]
@@ -357,6 +459,7 @@ async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
                 "50": "100",
             }
         },
+        hass,
     )
 
     assert light.to_lightener_levels[0] == [0,255]
@@ -365,6 +468,69 @@ async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
 
     assert light.to_lightener_levels[3] == [3,254]
     assert light.to_lightener_levels[10] == [10, 251]
+
+@pytest.mark.parametrize("entity_id, expected_type", [
+    ("light.test1", TYPE_DIMMABLE),
+    ("light.test_onoff", TYPE_ONOFF),
+])
+async def test_lightener_light_entity_type(entity_id, expected_type, hass):
+    """Test translate_brightness_back with float values"""
+
+    light = LightenerControlledLight(
+        entity_id,
+        {},
+        hass,
+    )
+
+    assert light.type is expected_type
+
+@pytest.mark.parametrize("lightener_level, light_level", [
+    (0,0),
+    (1,10),
+    (26,255),
+    (39,123),
+    (255,0),
+])
+async def test_lightener_light_entity_translate_brightness_dimmable(lightener_level, light_level, hass):
+    """Test translate_brightness_back with float values"""
+
+    light = LightenerControlledLight(
+        "light.test1",
+        {
+            "brightness": {
+                "10": "100",
+                "20": "0",
+                "100": "0"
+            }
+        },
+        hass,
+    )
+
+    assert light.translate_brightness(lightener_level) == light_level
+
+@pytest.mark.parametrize("lightener_level, light_level", [
+    (0,0),
+    (1,255),
+    (26,255),
+    (39,255),
+    (255,0),
+])
+async def test_lightener_light_entity_translate_brightness_dimmable_onoff(lightener_level, light_level, hass):
+    """Test translate_brightness_back with float values"""
+
+    light = LightenerControlledLight(
+        "light.test_onoff",
+        {
+            "brightness": {
+                "10": "100",
+                "20": "0",
+                "100": "0"
+            }
+        },
+        hass,
+    )
+
+    assert light.translate_brightness(lightener_level) == light_level
 
 async def test_lightener_light_entity_translate_brightness_float(hass):
     """Test translate_brightness_back with float values"""
@@ -376,6 +542,7 @@ async def test_lightener_light_entity_translate_brightness_float(hass):
                 "10": "100" # 26: 255
             }
         },
+        hass,
     )
 
     assert light.translate_brightness(2.9) == 20
@@ -390,6 +557,7 @@ async def test_lightener_light_entity_translate_brightness_back_float(hass):
                 "10": "100" # 26: 255
             }
         },
+        hass,
     )
 
     assert light.translate_brightness_back(25.9) == [3]
@@ -397,14 +565,15 @@ async def test_lightener_light_entity_translate_brightness_back_float(hass):
 ###########################################################
 ### Other
 
-
-def test_convert_percent_to_brightness():
+@pytest.mark.parametrize("percent, brightness", [
+    (0,0),
+    (10,26),
+    (100,255),
+])
+def test_convert_percent_to_brightness(percent, brightness):
     """Test the _convert_percent_to_brightness function"""
 
-    assert _convert_percent_to_brightness(0) == 0
-    assert _convert_percent_to_brightness(10) == 26
-    assert _convert_percent_to_brightness(100) == 255
-
+    assert _convert_percent_to_brightness(percent) == brightness
 
 async def test_async_setup_platform(hass):
     """Test for platform setup"""
