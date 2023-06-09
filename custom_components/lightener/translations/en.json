@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Create a Lightener device",
-        "description": "Please give a name to the Lightener device being created",
+        "description": "Please provide a name for the Lightener device you are creating",
         "data": {
           "name": "Device name"
         },
         "data_description": {
-          "name": "The goal is making it obvious which group of lights is controlled by this device. Usually it's an area/room name, like \"Living Room\" but it can be anything"
+          "name": "The purpose is to clearly indicate which group of lights is controlled by this device. Typically, it is an area or room name, such as \"Living Room,\" but it can be anything"
         }
       },
       "lights": {
@@ -18,18 +18,18 @@
         }
       },
       "light_configuration": {
-        "title": "\"{light_name}\" configuration",
+        "title": "Configure \"{light_name}\"",
         "data": {
           "brightness": "Brightness mapping"
         },
         "data_description": {
-          "brightness": "A list mapping the brightness of this light when the Lightener reaches certain brightness levels. Each line has the format (Lightner brightness %): (Controlled light brightness %). For example, \"60:100\" specifies that when the Lightener reaches 60% of brightness \"{light_name}\" will reach 100%"
+          "brightness": "A list that maps the brightness of this light when the Lightener reaches certain brightness levels. Each line has the format (Lightener brightness %): (Controlled light brightness %). For example, \"60:100\" specifies that when the Lightener reaches 60% brightness, \"{light_name}\" will reach 100% brightness"
         }
       }
     },
     "error": {
       "controlled_entities_empty": "Select at least one light",
-      "invalid_brightness": "Invalid brightness mapping configuration \"{error_entry}\". Each line must have the format \"(number from 1 to 100): (number from 0 to 100)\". For example \"40: 100\""
+      "invalid_brightness": "Invalid brightness mapping configuration \"{error_entry}\". Each line must have the format \"(number from 1 to 100): (number from 0 to 100)\". For example, \"40:100\""
     }
   },
   "options": {
@@ -41,18 +41,18 @@
         }
       },
       "light_configuration": {
-        "title": "\"{light_name}\" configuration",
+        "title": "Configure \"{light_name}\"",
         "data": {
           "brightness": "Brightness mapping"
         },
         "data_description": {
-          "brightness": "A list mapping the brightness of this light when the Lightener reaches certain brightness levels. Each line has the format (Lightner brightness %): (Controlled light brightness %). For example, \"60:100\" specifies that when the Lightener reaches 60% of brightness \"{light_name}\" will reach 100%"
+          "brightness": "A list that maps the brightness of this light when the Lightener reaches certain brightness levels. Each line has the format (Lightener brightness %): (Controlled light brightness %). For example, \"60:100\" specifies that when the Lightener reaches 60% brightness, \"{light_name}\" will reach 100% brightness"
         }
       }
     },
     "error": {
       "controlled_entities_empty": "Select at least one light",
-      "invalid_brightness": "Invalid brightness mapping configuration \"{error_entry}\". Each line must have the format \"(number from 1 to 100): (number from 0 to 100)\". For example \"40: 100\""
+      "invalid_brightness": "Invalid brightness mapping configuration \"{error_entry}\". Each line must have the format \"(number from 1 to 100): (number from 0 to 100)\". For example, \"40:100\""
     }
   }
 }
