@@ -5,4 +5,4 @@ ruff==0.0.276
 
 # For tests
 pytest==7.4.0
-pytest-homeassistant-custom-component==0.13.40
+pytest-homeassistant-custom-component==0.13.43
