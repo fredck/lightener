@@ -1,0 +1,27 @@
+{
+  "editor.rulers": [
+    88
+  ],
+  "editor.tabSize": 4,
+  "editor.formatOnPaste": false,
+  "editor.formatOnSave": true,
+  "editor.formatOnType": true,
+  "files.autoSave": "onFocusChange",
+  "files.associations": {
+    "*.yaml": "home-assistant"
+  },
+  "files.eol": "\n",
+  "files.trimTrailingWhitespace": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": [],
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    }
+  }
+}

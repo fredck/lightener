@@ -1,3 +1,11 @@
 {
-  "recommendations": ["esbenp.prettier-vscode", "ms-python.python"]
+    "recommendations": [
+        "charliermarsh.ruff",
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "ms-python.pylint",
+        "ms-python.vscode-pylance",
+        "visualstudioexptteam.vscodeintellicode",
+        "redhat.vscode-yaml"
+    ]
 }

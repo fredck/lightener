@@ -14,7 +14,7 @@ coverage.xml
 .vscode/*
 !.vscode/extensions.json
 !.vscode/launch.json
-!.vscode/settings.default.json
+!.vscode/settings.json
 !.vscode/tasks.json
 
 # Home Assistant configuration

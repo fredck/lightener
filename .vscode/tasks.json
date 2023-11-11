@@ -1,11 +1,36 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Install requirements.txt dependencies",
-      "type": "shell",
-      "command": "scripts/setup",
-      "problemMatcher": []
-    }
-  ]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Lint with Flake8",
+            "type": "shell",
+            "command": "flake8",
+            "group": "build",
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Format with Black",
+            "type": "shell",
+            "command": "black .",
+            "group": "build",
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Install requirements.txt dependencies",
+            "type": "shell",
+            "command": "pip install -r requirements.txt",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            }
+        }
+    ]
 }
