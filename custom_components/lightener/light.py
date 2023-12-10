@@ -11,16 +11,20 @@ from typing import Any
 import homeassistant.helpers.config_validation as cv
 import homeassistant.util.ulid as ulid_util
 import voluptuous as vol
-from homeassistant.components.group.light import (FORWARDED_ATTRIBUTES,
-                                                  LightGroup)
-from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_TRANSITION
+from homeassistant.components.group.light import FORWARDED_ATTRIBUTES, LightGroup
+from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_TRANSITION, ColorMode
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.components.light import ColorMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (ATTR_ENTITY_ID, CONF_ENTITIES,
-                                 CONF_FRIENDLY_NAME, CONF_LIGHTS,
-                                 SERVICE_TURN_OFF, SERVICE_TURN_ON, STATE_ON)
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    CONF_ENTITIES,
+    CONF_FRIENDLY_NAME,
+    CONF_LIGHTS,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_ON,
+)
+from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -121,7 +125,7 @@ class LightenerLight(LightGroup):
             unique_id=unique_id,
             name=config_data[CONF_FRIENDLY_NAME] if unique_id is None else None,
             entity_ids=entity_ids,
-            mode=None
+            mode=None,
         )
 
         self._attr_has_entity_name = unique_id is not None
@@ -129,7 +133,7 @@ class LightenerLight(LightGroup):
         if self._attr_has_entity_name:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, self.unique_id)},
-                name=config_data[CONF_FRIENDLY_NAME]
+                name=config_data[CONF_FRIENDLY_NAME],
             )
 
         self._entities = entities
@@ -183,7 +187,7 @@ class LightenerLight(LightGroup):
                 service,
                 entity_data,
                 blocking=False,
-                context=self._context,
+                context=Context(id=SIDE_EFFECT_CONTEXT_ID),
             )
 
     @callback
@@ -207,19 +211,26 @@ class LightenerLight(LightGroup):
                 for entity in self._entities:
                     if entity.entity_id == state.entity_id:
                         if state.state == STATE_ON:
-                            entity_brightness = state.attributes.get(ATTR_BRIGHTNESS, 255)
+                            entity_brightness = state.attributes.get(
+                                ATTR_BRIGHTNESS, 255
+                            )
                         else:
                             entity_brightness = 0
 
                         if entity_brightness is not None:
-                            levels.append(entity.translate_brightness_back(entity_brightness))
+                            levels.append(
+                                entity.translate_brightness_back(entity_brightness)
+                            )
                         else:
                             levels.append([])
 
         common_level: set = None
 
         # If the current lightener level is not present in the possible levels of the controlled lights.
-        if levels and len(set([current_brightness]).intersection(*map(set, levels))) == 0:
+        if (
+            levels
+            and len(set([current_brightness]).intersection(*map(set, levels))) == 0
+        ):
             # Build a list of levels which are common for all lights.
             common_level = set.intersection(*map(set, levels))
 
@@ -243,6 +254,7 @@ class LightenerLight(LightGroup):
         if len(self._attr_supported_color_modes) == 0:
             self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
 
+
 class LightenerControlledLight:
     """Represents a light entity managed by a LightnerLight."""
 
@@ -250,7 +262,7 @@ class LightenerControlledLight:
         self: LightenerControlledLight,
         entity_id: str,
         config: dict,
-        hass: HomeAssistant
+        hass: HomeAssistant,
     ) -> None:
         self.entity_id = entity_id
         self.hass = hass
@@ -273,15 +285,14 @@ class LightenerControlledLight:
 
         # List with all possible Lightener levels for a given entity level.
         # Initializa it with a list from 0 to 255 having each entry an empty array.
-        to_lightener_levels = [[] for i in range(0,256)]
-        to_lightener_levels_on_off = [[] for i in range(0,256)]
+        to_lightener_levels = [[] for i in range(0, 256)]
+        to_lightener_levels_on_off = [[] for i in range(0, 256)]
 
         previous_lightener_level = 0
         previous_light_level = 0
 
         # Fill all levels with the calculated values between the ranges.
         for lightener_level, light_level in config_levels.items():
-
             # Calculate all possible levels between the configured ranges
             # to be used during translation (lightener -> entity)
             for i in range(previous_lightener_level + 1, lightener_level):
@@ -296,17 +307,25 @@ class LightenerControlledLight:
 
                 # On/Off entities have only two possible levels: 0 (off) and 255 (on).
                 levels_on_off.append(255 if value_at_current_level > 0 else 0)
-                to_lightener_levels_on_off[255 if value_at_current_level > 0 else 0].append(i)
+                to_lightener_levels_on_off[
+                    255 if value_at_current_level > 0 else 0
+                ].append(i)
 
             # To account for rounding, we use the configured values directly.
             levels.append(light_level)
             to_lightener_levels[light_level].append(lightener_level)
 
             levels_on_off.append(255 if light_level > 0 else 0)
-            to_lightener_levels_on_off[255 if light_level > 0 else 0].append(lightener_level)
+            to_lightener_levels_on_off[255 if light_level > 0 else 0].append(
+                lightener_level
+            )
 
             # Do the reverse calculation for the oposite translation direction (entity -> lightener)
-            for i in range(previous_light_level, light_level, 1 if previous_light_level < light_level else -1):
+            for i in range(
+                previous_light_level,
+                light_level,
+                1 if previous_light_level < light_level else -1,
+            ):
                 value_at_current_level = math.ceil(
                     previous_lightener_level
                     + (lightener_level - previous_lightener_level)
@@ -318,7 +337,9 @@ class LightenerControlledLight:
                 # create a list with all possible lightener levels at this (i) entity brightness.
                 if value_at_current_level not in to_lightener_levels[i]:
                     to_lightener_levels[i].append(value_at_current_level)
-                    to_lightener_levels_on_off[255 if value_at_current_level > 0 else 0].append(value_at_current_level)
+                    to_lightener_levels_on_off[
+                        255 if value_at_current_level > 0 else 0
+                    ].append(value_at_current_level)
 
             previous_lightener_level = lightener_level
             previous_light_level = light_level
@@ -338,9 +359,13 @@ class LightenerControlledLight:
             state = self.hass.states.get(self.entity_id)
             if state is not None:
                 supported_color_modes = state.attributes.get("supported_color_modes")
-                self._type = TYPE_ONOFF \
-                    if supported_color_modes and ColorMode.ONOFF in supported_color_modes and len(supported_color_modes) == 1 \
+                self._type = (
+                    TYPE_ONOFF
+                    if supported_color_modes
+                    and ColorMode.ONOFF in supported_color_modes
+                    and len(supported_color_modes) == 1
                     else TYPE_DIMMABLE
+                )
 
         return self._type
 
