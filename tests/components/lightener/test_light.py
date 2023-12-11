@@ -4,7 +4,7 @@ from unittest.mock import ANY, Mock, patch
 from uuid import uuid4
 
 import pytest
-from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_TRANSITION, ColorMode
+from homeassistant.components.light import ATTR_TRANSITION, ColorMode
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant, ServiceRegistry
@@ -66,26 +66,11 @@ async def test_lightener_light_turn_on(hass: HomeAssistant, create_lightener):
         }
     )
 
-    with patch.object(ServiceRegistry, "async_call") as async_call_mock:
-        await lightener.async_turn_on()
+    await lightener.async_turn_on()
+    await hass.async_block_till_done()
 
-    assert async_call_mock.call_count == 2
-
-    async_call_mock.assert_any_call(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_ON,
-        {ATTR_ENTITY_ID: "light.test1"},
-        blocking=False,
-        context=ANY,
-    )
-
-    async_call_mock.assert_any_call(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_ON,
-        {ATTR_ENTITY_ID: "light.test2"},
-        blocking=False,
-        context=ANY,
-    )
+    assert hass.states.get("light.test1").state == "on"
+    assert hass.states.get("light.test2").state == "on"
 
 
 async def test_lightener_light_turn_on_forward(hass: HomeAssistant, create_lightener):
@@ -126,16 +111,10 @@ async def test_lightener_light_turn_on_go_off_if_brightness_0(
 
     hass.states.async_set(entity_id="light.test1", new_state="on")
 
-    with patch.object(ServiceRegistry, "async_call") as async_call_mock:
-        await lightener.async_turn_on(brightness=1)
+    await lightener.async_turn_on(brightness=1)
+    await hass.async_block_till_done()
 
-    async_call_mock.assert_called_once_with(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_OFF,
-        {ATTR_ENTITY_ID: "light.test1"},
-        blocking=False,
-        context=ANY,
-    )
+    assert hass.states.get("light.test1").state == "off"
 
 
 async def test_lightener_light_turn_on_translate_brightness(
@@ -149,19 +128,13 @@ async def test_lightener_light_turn_on_translate_brightness(
             "entities": {"light.test1": {"50": "0"}},
         }
     )
-
     hass.states.async_set(entity_id="light.test1", new_state="on")
 
-    with patch.object(ServiceRegistry, "async_call") as async_call_mock:
-        await lightener.async_turn_on(brightness=192)
+    await lightener.async_turn_on(brightness=192)
+    await hass.async_block_till_done()
 
-    async_call_mock.assert_called_once_with(
-        LIGHT_DOMAIN,
-        SERVICE_TURN_ON,
-        {ATTR_ENTITY_ID: "light.test1", ATTR_BRIGHTNESS: 129},
-        blocking=False,
-        context=ANY,
-    )
+    assert hass.states.get("light.test1").state == "on"
+    assert hass.states.get("light.test1").attributes["brightness"] == 129
 
 
 async def test_lightener_light_turn_on_go_off_if_brightness_0_transition(
