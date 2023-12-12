@@ -149,17 +149,20 @@ class LightenerLight(LightGroup):
             key: value for key, value in kwargs.items() if key in FORWARDED_ATTRIBUTES
         }
 
-        # Retrieve the brightness being set to the Lightener (or current level if not setting it)
+        # Retrieve the brightness being set to the Lightener
         brightness = kwargs.get(ATTR_BRIGHTNESS)
 
-        if brightness is not None:
+        # If the brightness is not being set in the lightener, check if it was set in the Lightener.
+        if brightness is None and self._attr_brightness:
+            brightness = self._attr_brightness
+        else:
             self._attr_brightness = brightness
 
         for entity in self._entities:
             service = SERVICE_TURN_ON
             entity_brightness = None
 
-            # If the brightess is being set in the lightener, translate it to the entity level.
+            # If the brightness is being set in the lightener, translate it to the entity level.
             if brightness is not None:
                 entity_brightness = entity.translate_brightness(brightness)
 
