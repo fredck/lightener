@@ -37,7 +37,7 @@ light:
         turn_off:
         set_level:
         set_temperature:
-        set_color:
+        set_rgb:
 
   # This is the Lightener v1 configuration example.
   # Although *still* supported it has been replaced by UI configuration with v2.
