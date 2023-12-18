@@ -6,4 +6,4 @@ ruff==0.1.7
 # For tests
 pytest==7.4.3
 pytest-asyncio==0.21.0
-pytest_homeassistant_custom_component==0.13.83
+pytest_homeassistant_custom_component==0.13.85
