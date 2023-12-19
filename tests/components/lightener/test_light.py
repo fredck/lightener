@@ -656,3 +656,35 @@ async def test_lightener_issue_41(hass: HomeAssistant, create_lightener):
     assert hass.states.get("light.test1").state == "on"
     assert hass.states.get("light.test1").attributes["brightness"] == 30
     assert hass.states.get("light.test2").state == "off"
+
+
+async def test_lightener_issue_97(hass: HomeAssistant, create_lightener):
+    """Test the state changes of the LightenerLight class when turned on"""
+
+    lightener: LightenerLight = await create_lightener(
+        config={
+            "friendly_name": "Test",
+            "entities": {
+                "light.test1": {50: 100},
+                "light.test_onoff": {50: 0},
+            },
+        }
+    )
+
+    await lightener.async_turn_on(brightness=130)  # 51% of 255
+    await hass.async_block_till_done()
+    assert lightener.brightness == 130
+    assert hass.states.get("light.test").attributes["brightness"] == 130
+
+    assert hass.states.get("light.test1").state == "on"
+    assert hass.states.get("light.test_onoff").state == "on"
+
+    await lightener.async_turn_on(brightness=200)
+    await hass.async_block_till_done()
+    assert lightener.brightness == 200
+    assert hass.states.get("light.test").attributes["brightness"] == 200
+
+    assert hass.states.get("light.test1").state == "on"
+    assert hass.states.get("light.test_onoff").state == "on"
+
+    assert hass.states.get("light.test1").attributes["brightness"] == 255
