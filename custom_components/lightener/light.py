@@ -156,7 +156,9 @@ class LightenerLight(LightGroup):
         if brightness is None and self._attr_brightness:
             brightness = self._attr_brightness
         else:
+            # Update the Lightener brightness level to the one being set.
             self._attr_brightness = brightness
+            await self.async_update_ha_state()
 
         for entity in self._entities:
             service = SERVICE_TURN_ON
