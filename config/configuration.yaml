@@ -38,6 +38,15 @@ light:
         set_level:
         set_temperature:
         set_rgb:
+      issue_97_ceiling:
+        friendly_name: "Ceiling"
+        turn_on:
+        turn_off:
+      issue_97_lamp:
+        friendly_name: "Lamp"
+        turn_on:
+        turn_off:
+        set_level:
 
   # This is the Lightener v1 configuration example.
   # Although *still* supported it has been replaced by UI configuration with v2.
