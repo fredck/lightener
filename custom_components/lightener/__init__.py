@@ -1,14 +1,12 @@
 """Lightener Integration."""
 
+import logging
 from types import MappingProxyType
 
-import logging
-
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ADDRESS, CONF_PORT, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
 from .config_flow import LightenerConfigFlow
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,7 +18,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Setup platform from a config entry."""
 
     hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(entry, Platform.LIGHT)
+        hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     )
 
     return True
