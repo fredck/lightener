@@ -1,7 +1,7 @@
 colorlog>=6.8.0
 homeassistant==2023.12.3
 pip>=21.3.2
-ruff==0.1.8
+ruff==0.1.13
 
 # For tests
 pytest==7.4.3
