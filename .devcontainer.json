@@ -1,6 +1,6 @@
 {
   "name": "Lightener Dev Container",
-  "image": "mcr.microsoft.com/vscode/devcontainers/python:0-3.11-bullseye",
+  "image": "python:3.12-bullseye",
   "postCreateCommand": "scripts/setup",
   "forwardPorts": [
     8123
@@ -33,7 +33,7 @@
       }
     }
   },
-  "remoteUser": "vscode",
+  "remoteUser": "root",
   "workspaceFolder": "/workspace",
   "mounts": [
     "source=${localWorkspaceFolder},target=/workspace,type=bind"

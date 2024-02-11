@@ -31,7 +31,7 @@ async def test_async_setup_entry(hass):
 
     assert await async_setup_entry(hass, config_entry)
     await hass.async_block_till_done()
-    assert "light.lightener" in hass.config.components
+    assert "lightener.light" in hass.config.components
 
 
 @patch("custom_components.lightener.async_unload_entry", wraps=async_unload_entry)
@@ -66,7 +66,12 @@ async def test_migrate_entry_current(hass: HomeAssistant) -> None:
     """Test is the migration does nothing for an up-to-date configuration"""
 
     config_entry = ConfigEntry(
-        LightenerConfigFlow.VERSION, "lightener", DOMAIN, {}, "user"
+        version=LightenerConfigFlow.VERSION,
+        minor_version=LightenerConfigFlow.VERSION,
+        title="lightener",
+        domain=DOMAIN,
+        data={},
+        source="user",
     )
 
     data = config_entry.data
@@ -93,7 +98,14 @@ async def test_migrate_entry_v1(hass: HomeAssistant) -> None:
         },
     }
 
-    config_entry = ConfigEntry(1, "lightener", DOMAIN, config_v1, "user")
+    config_entry = ConfigEntry(
+        version=1,
+        minor_version=1,
+        title="lightener",
+        domain=DOMAIN,
+        data=config_v1,
+        source="user",
+    )
 
     mock = Mock()
 
@@ -127,7 +139,14 @@ async def test_migrate_entry_v1_no_update_hass(hass: HomeAssistant) -> None:
         },
     }
 
-    config_entry = ConfigEntry(1, "lightener", DOMAIN, config_v1, "user")
+    config_entry = ConfigEntry(
+        version=1,
+        minor_version=1,
+        title="lightener",
+        domain=DOMAIN,
+        data=config_v1,
+        source="user",
+    )
 
     mock = Mock()
 
@@ -148,7 +167,14 @@ async def test_migrate_entry_v1_no_update_hass(hass: HomeAssistant) -> None:
 async def test_migrate_unkown_version(hass: HomeAssistant) -> None:
     """Test is the migration does nothing for an up-to-date configuration"""
 
-    config_entry = ConfigEntry(1000, "lightener", DOMAIN, {}, "user")
+    config_entry = ConfigEntry(
+        version=1000,
+        minor_version=1000,
+        title="lightener",
+        domain=DOMAIN,
+        data={},
+        source="user",
+    )
 
     with patch.object(logging.Logger, "error") as mock:
         assert await async_migrate_entry(hass, config_entry, False) is False

@@ -9,7 +9,6 @@ from types import MappingProxyType
 from typing import Any
 
 import homeassistant.helpers.config_validation as cv
-import homeassistant.util.ulid as ulid_util
 import voluptuous as vol
 from homeassistant.components.group.light import FORWARDED_ATTRIBUTES, LightGroup
 from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_TRANSITION, ColorMode
@@ -24,7 +23,7 @@ from homeassistant.const import (
     SERVICE_TURN_ON,
     STATE_ON,
 )
-from homeassistant.core import Context, HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -32,8 +31,6 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from . import async_migrate_entry
 from .const import DOMAIN, TYPE_DIMMABLE, TYPE_ONOFF
-
-SIDE_EFFECT_CONTEXT_ID = ulid_util.ulid()
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,7 +84,14 @@ async def async_setup_platform(
     lights = []
 
     for object_id, entity_config in config[CONF_LIGHTS].items():
-        entry = ConfigEntry(1, DOMAIN, "", entity_config, "user")
+        entry = ConfigEntry(
+            version=1,
+            minor_version=1,
+            domain=DOMAIN,
+            data=entity_config,
+            source="user",
+            title="",
+        )
 
         await async_migrate_entry(hass, entry, False)
 
@@ -137,6 +141,8 @@ class LightenerLight(LightGroup):
             )
 
         self._entities = entities
+
+        _LOGGER.debug("Created lightner: %s", config_data[CONF_FRIENDLY_NAME])
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Forward the turn_on command to all controlled lights."""
@@ -192,7 +198,7 @@ class LightenerLight(LightGroup):
                 service,
                 entity_data,
                 blocking=False,
-                context=Context(id=SIDE_EFFECT_CONTEXT_ID),
+                context=self._context,
             )
 
     @callback

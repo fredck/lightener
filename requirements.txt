@@ -1,9 +1,9 @@
 colorlog>=6.8.0
-homeassistant==2023.12.3
+homeassistant==2024.2.1
 pip>=21.3.2
 ruff==0.1.8
 
 # For tests
-pytest==7.4.3
-pytest-asyncio==0.21.0
-pytest_homeassistant_custom_component==0.13.85
+pytest==7.4.4
+pytest-asyncio==0.23.4
+pytest_homeassistant_custom_component==0.13.100
