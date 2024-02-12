@@ -36,7 +36,6 @@ light:
         turn_on:
         turn_off:
         set_level:
-        set_temperature:
         set_rgb:
       issue_97_ceiling:
         friendly_name: "Ceiling"
