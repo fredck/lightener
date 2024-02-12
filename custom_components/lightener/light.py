@@ -229,6 +229,14 @@ class LightenerLight(LightGroup):
         self.async_update_group_state()
         self.async_write_ha_state()
 
+    def turn_on(self, **kwargs: Any) -> None:
+        """Turn the lights controlled by this Lightener on. There is no guarantee that this method is synchronous."""
+        self.async_turn_on(**kwargs)
+
+    def turn_off(self, **kwargs: Any) -> None:
+        """Turn the lights controlled by this Lightener off. There is no guarantee that this method is synchronous."""
+        self.async_turn_off(**kwargs)
+
     @callback
     def async_update_group_state(self) -> None:
         """Update the Lightener state based on the controlled entities."""
