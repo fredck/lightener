@@ -77,7 +77,7 @@ async def async_setup_platform(
     hass: HomeAssistant,
     config: ConfigType,
     async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
+    discovery_info: DiscoveryInfoType | None = None,  # pylint: disable=unused-argument
 ) -> None:
     """Set up entities for configuration.yaml entries."""
 
@@ -288,7 +288,8 @@ class LightenerLight(LightGroup):
         else:
             self._attr_brightness = None
 
-        # Lightener will always support brightness, no matter the features available in the group (they may be on/off only).
+        # Lightener will always support brightness, no matter the features available in the group
+        # (they may be on/off only).
         if self._attr_color_mode == ColorMode.ONOFF:
             self._attr_color_mode = ColorMode.BRIGHTNESS
 
