@@ -64,7 +64,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Setup entities for config entries."""
+    """Set up entities for config entries."""
     unique_id = config_entry.entry_id
 
     await async_migrate_entry(hass, config_entry)
@@ -218,6 +218,7 @@ class LightenerLight(LightGroup):
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off all lights controlled by this Lightener."""
         self._is_frozen = True
 
         self._prefered_brightness = self._attr_brightness
@@ -234,9 +235,6 @@ class LightenerLight(LightGroup):
 
         if self._is_frozen:
             return
-
-        # Store the current brightness so we can eventually restore it later in the code.
-        current_brightness = self._attr_brightness
 
         # Let the Group integration make its magic, which includes recalculating the brightness.
         super().async_update_group_state()
@@ -297,6 +295,8 @@ class LightenerLight(LightGroup):
 
     @callback
     def async_write_ha_state(self) -> None:
+        """Write the state to the state machine."""
+
         if self._is_frozen:
             return
 
@@ -312,6 +312,8 @@ class LightenerControlledLight:
         config: dict,
         hass: HomeAssistant,
     ) -> None:
+        """Create and instance of this class."""
+
         self.entity_id = entity_id
         self.hass = hass
         self._type = None
@@ -398,7 +400,7 @@ class LightenerControlledLight:
         self.to_lightener_levels_on_off = to_lightener_levels_on_off
 
     @property
-    def type(self) -> TYPE_ONOFF | TYPE_DIMMABLE | None:
+    def type(self) -> str | None:
         """The entity type."""
 
         # It may take some time between the initialization of this class and the effective availability of the entity.
@@ -418,7 +420,7 @@ class LightenerControlledLight:
         return self._type
 
     def translate_brightness(self, brightness: int) -> int:
-        """Calculates the entitiy brightness for the give Lightener brightness level."""
+        """Calculate the entitiy brightness for the give Lightener brightness level."""
 
         if self.type == TYPE_ONOFF:
             return self.levels_on_off[int(brightness)]
@@ -426,7 +428,7 @@ class LightenerControlledLight:
         return self.levels[int(brightness)]
 
     def translate_brightness_back(self, brightness: int) -> list[int]:
-        """Calculates all possible Lightener brightness levels for a give entity brightness."""
+        """Calculate all possible Lightener brightness levels for a give entity brightness."""
 
         if brightness is None:
             return []
