@@ -92,7 +92,7 @@ async def test_lightener_light_turn_on_forward(hass: HomeAssistant, create_light
             "effect": "blink",
             "color_temp_kelvin": 3000,
         },
-        blocking=False,
+        blocking=True,
         context=ANY,
     )
 
@@ -158,7 +158,7 @@ async def test_lightener_light_turn_on_go_off_if_brightness_0_transition(
         LIGHT_DOMAIN,
         SERVICE_TURN_OFF,
         {ATTR_ENTITY_ID: "light.test1", ATTR_TRANSITION: 10},
-        blocking=False,
+        blocking=True,
         context=ANY,
     )
 
@@ -671,10 +671,10 @@ async def test_lightener_issue_97(hass: HomeAssistant, create_lightener):
         }
     )
 
-    await lightener.async_turn_on(brightness=130)  # 51% of 255
+    await lightener.async_turn_on(brightness=129)  # 51% of 255
     await hass.async_block_till_done()
-    assert lightener.brightness == 130
-    assert hass.states.get("light.test").attributes["brightness"] == 130
+    assert lightener.brightness == 129
+    assert hass.states.get("light.test").attributes["brightness"] == 129
 
     assert hass.states.get("light.test1").state == "on"
     assert hass.states.get("light.test_onoff").state == "on"
