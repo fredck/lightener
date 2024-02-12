@@ -14,14 +14,14 @@ from custom_components.lightener.light import LightenerLight
 
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
+def auto_enable_custom_integrations(enable_custom_integrations):  # pylint: disable=unused-argument
     """Enable custom integrations for all tests."""
     yield
 
 
 @pytest.fixture(autouse=True)
 async def setup_test_lights(hass: HomeAssistant):
-    """Register test lights used in tests"""
+    """Register test lights used in tests."""
 
     template_lights = {
         test: {
@@ -49,7 +49,7 @@ async def setup_test_lights(hass: HomeAssistant):
 async def create_lightener(
     hass: HomeAssistant,
 ) -> Callable[[str, dict], LightenerLight]:
-    """Creates a function used to create Lightners"""
+    """Create a function used to create Lightners."""
 
     async def creator(name: str | None = None, config: dict | None = None) -> str:
         entry = MockConfigEntry(

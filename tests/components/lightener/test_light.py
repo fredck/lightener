@@ -1,4 +1,4 @@
-"""Tests for the light platform"""
+"""Tests for the light platform."""
 
 from unittest.mock import ANY, Mock, patch
 from uuid import uuid4
@@ -22,7 +22,7 @@ from custom_components.lightener.light import (
 
 
 async def test_lightener_light_properties(hass):
-    """Test all the basic properties of the LightenerLight class"""
+    """Test all the basic properties of the LightenerLight class."""
 
     config = {"friendly_name": "Living Room"}
     unique_id = str(uuid4())
@@ -42,7 +42,7 @@ async def test_lightener_light_properties(hass):
 
 
 async def test_lightener_light_properties_no_unique_id(hass):
-    """Test all the basic properties of the LightenerLight class when no unique id is provided"""
+    """Test all the basic properties of the LightenerLight class when no unique id is provided."""
 
     config = {"friendly_name": "Living Room"}
 
@@ -54,7 +54,7 @@ async def test_lightener_light_properties_no_unique_id(hass):
 
 
 async def test_lightener_light_turn_on(hass: HomeAssistant, create_lightener):
-    """Test the state changes of the LightenerLight class when turned on"""
+    """Test the state changes of the LightenerLight class when turned on."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -73,8 +73,8 @@ async def test_lightener_light_turn_on(hass: HomeAssistant, create_lightener):
     assert hass.states.get("light.test2").state == "on"
 
 
-async def test_lightener_light_turn_on_forward(hass: HomeAssistant, create_lightener):
-    """Test if passed arguments are forwared when turned on"""
+async def test_lightener_light_turn_on_forward(hass: HomeAssistant, create_lightener):  # pylint: disable=unused-argument
+    """Test if passed arguments are forwared when turned on."""
 
     lightener: LightenerLight = await create_lightener()
 
@@ -100,7 +100,7 @@ async def test_lightener_light_turn_on_forward(hass: HomeAssistant, create_light
 async def test_lightener_light_turn_on_go_off_if_brightness_0(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on sends brightness 0 if the controlled light is on"""
+    """Test that turned on sends brightness 0 if the controlled light is on."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -120,7 +120,7 @@ async def test_lightener_light_turn_on_go_off_if_brightness_0(
 async def test_lightener_light_turn_on_translate_brightness(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on sends brightness 0 if the controlled light is on"""
+    """Test that turned on sends brightness 0 if the controlled light is on."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -140,7 +140,7 @@ async def test_lightener_light_turn_on_translate_brightness(
 async def test_lightener_light_turn_on_go_off_if_brightness_0_transition(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on sends brightness 0 if the controlled light is on"""
+    """Test that turned on sends brightness 0 if the controlled light is on."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -166,7 +166,7 @@ async def test_lightener_light_turn_on_go_off_if_brightness_0_transition(
 async def test_lightener_light_async_update_group_state(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on does nothing if the controlled light is already off"""
+    """Test that turned on does nothing if the controlled light is already off."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -217,7 +217,7 @@ async def test_lightener_light_async_update_group_state(
 async def test_lightener_light_async_update_group_state_zero(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on does nothing if the controlled light is already off"""
+    """Test that turned on does nothing if the controlled light is already off."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -240,7 +240,7 @@ async def test_lightener_light_async_update_group_state_zero(
 async def test_lightener_light_async_update_group_state_unavailable(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on does nothing if the controlled light is already off"""
+    """Test that turned on does nothing if the controlled light is already off."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -263,7 +263,7 @@ async def test_lightener_light_async_update_group_state_unavailable(
 async def test_lightener_light_async_update_group_state_no_match_no_change(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on does nothing if the controlled light is already off"""
+    """Test that turned on does nothing if the controlled light is already off."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -312,7 +312,7 @@ async def test_lightener_light_async_update_group_state_no_match_no_change(
 async def test_lightener_light_async_update_group_state_current_good_no_change(
     test1, current, result, hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on does nothing if the controlled light is already off"""
+    """Test that turned on does nothing if the controlled light is already off."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -335,7 +335,7 @@ async def test_lightener_light_async_update_group_state_current_good_no_change(
 async def test_lightener_light_async_update_group_state_onoff(
     hass: HomeAssistant, create_lightener
 ):
-    """Test that turned on does nothing if the controlled light is already off"""
+    """Test that turned on does nothing if the controlled light is already off."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -363,7 +363,7 @@ async def test_lightener_light_async_update_group_state_onoff(
 
 
 async def test_lightener_light_entity_properties(hass):
-    """Test all the basic properties of the LightenerLight class"""
+    """Test all the basic properties of the LightenerLight class."""
 
     light = LightenerControlledLight("light.test1", {"brightness": {"10": "20"}}, hass)
 
@@ -371,7 +371,7 @@ async def test_lightener_light_entity_properties(hass):
 
 
 async def test_lightener_light_entity_calculated_levels(hass):
-    """Test the calculation of brigthness levels"""
+    """Test the calculation of brigthness levels."""
 
     light = LightenerControlledLight(
         "light.test1",
@@ -413,7 +413,7 @@ async def test_lightener_light_entity_calculated_levels(hass):
 
 
 async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
-    """Test the calculation of brigthness levels"""
+    """Test the calculation of brigthness levels."""
 
     light = LightenerControlledLight(
         "light.test1",
@@ -459,7 +459,7 @@ async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
     ],
 )
 async def test_lightener_light_entity_type(entity_id, expected_type, hass):
-    """Test translate_brightness_back with float values"""
+    """Test translate_brightness_back with float values."""
 
     light = LightenerControlledLight(
         entity_id,
@@ -483,7 +483,7 @@ async def test_lightener_light_entity_type(entity_id, expected_type, hass):
 async def test_lightener_light_entity_translate_brightness_dimmable(
     lightener_level, light_level, hass
 ):
-    """Test translate_brightness_back with float values"""
+    """Test translate_brightness_back with float values."""
 
     light = LightenerControlledLight(
         "light.test1",
@@ -507,7 +507,7 @@ async def test_lightener_light_entity_translate_brightness_dimmable(
 async def test_lightener_light_entity_translate_brightness_dimmable_onoff(
     lightener_level, light_level, hass
 ):
-    """Test translate_brightness_back with float values"""
+    """Test translate_brightness_back with float values."""
 
     light = LightenerControlledLight(
         "light.test_onoff",
@@ -519,7 +519,7 @@ async def test_lightener_light_entity_translate_brightness_dimmable_onoff(
 
 
 async def test_lightener_light_entity_translate_brightness_float(hass):
-    """Test translate_brightness_back with float values"""
+    """Test translate_brightness_back with float values."""
 
     light = LightenerControlledLight(
         "light.test1",
@@ -535,7 +535,7 @@ async def test_lightener_light_entity_translate_brightness_float(hass):
 
 
 async def test_lightener_light_entity_translate_brightness_back_float(hass):
-    """Test translate_brightness_back with float values"""
+    """Test translate_brightness_back with float values."""
 
     light = LightenerControlledLight(
         "light.test1",
@@ -563,13 +563,13 @@ async def test_lightener_light_entity_translate_brightness_back_float(hass):
     ],
 )
 def test_convert_percent_to_brightness(percent, brightness):
-    """Test the _convert_percent_to_brightness function"""
+    """Test the _convert_percent_to_brightness function."""
 
     assert _convert_percent_to_brightness(percent) == brightness
 
 
 async def test_async_setup_platform(hass):
-    """Test for platform setup"""
+    """Test for platform setup."""
 
     # pylint: disable=W0212
 
@@ -627,7 +627,7 @@ async def test_async_setup_platform(hass):
 
 
 async def test_lightener_issue_41(hass: HomeAssistant, create_lightener):
-    """Test the state changes of the LightenerLight class when turned on"""
+    """Test the state changes of the LightenerLight class when turned on."""
 
     lightener: LightenerLight = await create_lightener(
         config={
@@ -645,7 +645,7 @@ async def test_lightener_issue_41(hass: HomeAssistant, create_lightener):
 
     await lightener.async_turn_off()
     await hass.async_block_till_done()
-    assert lightener.brightness == None
+    assert lightener.brightness is None
     assert hass.states.get("light.test1").state == "off"
     assert hass.states.get("light.test2").state == "off"
 
@@ -659,7 +659,7 @@ async def test_lightener_issue_41(hass: HomeAssistant, create_lightener):
 
 
 async def test_lightener_issue_97(hass: HomeAssistant, create_lightener):
-    """Test the state changes of the LightenerLight class when turned on"""
+    """Test the state changes of the LightenerLight class when turned on."""
 
     lightener: LightenerLight = await create_lightener(
         config={

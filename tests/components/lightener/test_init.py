@@ -1,4 +1,4 @@
-"""Tests for __init__"""
+"""Tests for __init__."""
 
 import logging
 from unittest.mock import Mock, patch
@@ -63,7 +63,7 @@ async def test_async_unload_entry(mock_unload, hass):
 
 
 async def test_migrate_entry_current(hass: HomeAssistant) -> None:
-    """Test is the migration does nothing for an up-to-date configuration"""
+    """Test is the migration does nothing for an up-to-date configuration."""
 
     config_entry = ConfigEntry(
         version=LightenerConfigFlow.VERSION,
@@ -82,7 +82,7 @@ async def test_migrate_entry_current(hass: HomeAssistant) -> None:
 
 
 async def test_migrate_entry_v1(hass: HomeAssistant) -> None:
-    """Test is the migration does nothing for an up-to-date configuration"""
+    """Test is the migration does nothing for an up-to-date configuration."""
 
     config_v1 = {
         "friendly_name": "Test",
@@ -123,7 +123,7 @@ async def test_migrate_entry_v1(hass: HomeAssistant) -> None:
 
 
 async def test_migrate_entry_v1_no_update_hass(hass: HomeAssistant) -> None:
-    """Test is the migration does nothing for an up-to-date configuration"""
+    """Test is the migration does nothing for an up-to-date configuration."""
 
     config_v1 = {
         "friendly_name": "Test",
@@ -165,7 +165,7 @@ async def test_migrate_entry_v1_no_update_hass(hass: HomeAssistant) -> None:
 
 
 async def test_migrate_unkown_version(hass: HomeAssistant) -> None:
-    """Test is the migration does nothing for an up-to-date configuration"""
+    """Test is the migration does nothing for an up-to-date configuration."""
 
     config_entry = ConfigEntry(
         version=1000,

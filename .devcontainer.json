@@ -20,7 +20,7 @@
         "ms-python.pylint",
         "ms-python.vscode-pylance",
         "visualstudioexptteam.vscodeintellicode",
-        "redhat.vscode-yaml",
+        "redhat.vscode-yaml"
       ],
       "settings": {
         "python.pythonPath": "/usr/bin/python3",

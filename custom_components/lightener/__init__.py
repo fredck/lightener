@@ -15,7 +15,7 @@ PLATFORMS = [Platform.LIGHT]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Setup platform from a config entry."""
+    """Set up platform from a config entry."""
 
     hass.async_create_task(
         hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -36,7 +36,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_migrate_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, update_hass: bool = True
 ) -> bool:
-    """Updates old versions of the configuration to the current format"""
+    """Update old versions of the configuration to the current format."""
 
     version = config_entry.version
     data = config_entry.data

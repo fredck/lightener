@@ -1,1 +1,1 @@
-"""Tests for components"""
+"""Tests for components."""

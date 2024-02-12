@@ -4,9 +4,8 @@ import re
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
-from homeassistant.const import CONF_ENTITIES, CONF_FRIENDLY_NAME, CONF_BRIGHTNESS
+from homeassistant.const import CONF_BRIGHTNESS, CONF_ENTITIES, CONF_FRIENDLY_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowHandler, FlowResult
 from homeassistant.helpers.entity_registry import (
@@ -31,20 +30,20 @@ class LightenerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         super().__init__()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        """Configure the lighener device name"""
+        """Configure the lighener device name."""
 
         return await self.lightener_flow.async_step_name(user_input)
 
     async def async_step_lights(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manages the selection of the lights controlled by the Lighetner light."""
+        """Manage the selection of the lights controlled by the Lighetner light."""
         return await self.lightener_flow.async_step_lights(user_input)
 
     async def async_step_light_configuration(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manages the configuration for each controlled light."""
+        """Manage the configuration for each controlled light."""
         return await self.lightener_flow.async_step_light_configuration(user_input)
 
     @staticmethod
@@ -70,18 +69,18 @@ class LightenerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manages the selection of the lights controlled by the Lighetner light."""
+        """Manage the selection of the lights controlled by the Lighetner light."""
         return await self.lightener_flow.async_step_lights(user_input)
 
     async def async_step_light_configuration(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manages the configuration for each controlled light."""
+        """Manage the configuration for each controlled light."""
         return await self.lightener_flow.async_step_light_configuration(user_input)
 
 
 class LightenerFlow:
-    """Holds steps for both the config and the options flow"""
+    """Handle steps for both the config and the options flow."""
 
     def __init__(
         self,
@@ -89,6 +88,8 @@ class LightenerFlow:
         steps: dict,
         config_entry: config_entries.ConfigEntry | None = None,
     ) -> None:
+        """Initialize the LightenerFlow."""
+
         self.flow_handler = flow_handler
         self.config_entry = config_entry
         self.data = {} if config_entry is None else config_entry.data.copy()
@@ -96,7 +97,7 @@ class LightenerFlow:
         self.steps = steps
 
     async def async_step_name(self, user_input: dict[str, Any] | None = None):
-        """Configure the lighener device name"""
+        """Configure the lighener device name."""
 
         errors = {}
 
@@ -121,7 +122,7 @@ class LightenerFlow:
     async def async_step_lights(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manages the selection of the lights controlled by the Lighetner light."""
+        """Manage the selection of the lights controlled by the Lighetner light."""
 
         errors = {}
 
@@ -135,7 +136,7 @@ class LightenerFlow:
             lightener_entities = async_entries_for_config_entry(
                 entity_registry, self.config_entry.entry_id
             )
-            lightener_entities = list(map(lambda e: e.entity_id, lightener_entities))
+            lightener_entities = [e.entity_id for e in lightener_entities]
 
             # Load the previously configured list of entities controlled by this Lightener.
             controlled_entities = list(
@@ -181,7 +182,7 @@ class LightenerFlow:
     async def async_step_light_configuration(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manages the configuration for each controlled light."""
+        """Manage the configuration for each controlled light."""
 
         brightness = ""
         placeholders = {}
@@ -254,7 +255,7 @@ class LightenerFlow:
         )
 
     async def async_save_data(self) -> FlowResult:
-        """Saves the configured data."""
+        """Save the configured data."""
 
         # We don't save it into the "options" key but always in "config",
         # no matter if the user called the config or the options flow.
