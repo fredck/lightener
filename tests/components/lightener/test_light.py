@@ -273,7 +273,7 @@ async def test_lightener_light_async_update_group_state_no_match_no_change(
     )
 
     def test(test1: int, test2: int, result: int):
-        lightener._attr_brightness = 150  # pylint: disable=protected-access
+        lightener._prefered_brightness = 150  # pylint: disable=protected-access
 
         hass.states.async_set(
             entity_id="light.test1", new_state="on", attributes={"brightness": test1}
@@ -292,10 +292,10 @@ async def test_lightener_light_async_update_group_state_no_match_no_change(
     test(1, 255, 129)
 
     # No matches
-    test(129, 1, 150)
-    test(1, 254, 150)
-    test(1, 1, 150)
-    test(1, None, 150)
+    test(129, 1, None)
+    test(1, 254, None)
+    test(1, 1, None)
+    test(1, None, None)
 
 
 @pytest.mark.parametrize(
@@ -321,7 +321,7 @@ async def test_lightener_light_async_update_group_state_current_good_no_change(
         }
     )
 
-    lightener._attr_brightness = current  # pylint: disable=protected-access
+    lightener._prefered_brightness = current  # pylint: disable=protected-access
 
     hass.states.async_set(
         entity_id="light.test1", new_state="on", attributes={"brightness": test1}
@@ -645,7 +645,7 @@ async def test_lightener_issue_41(hass: HomeAssistant, create_lightener):
 
     await lightener.async_turn_off()
     await hass.async_block_till_done()
-    assert lightener.brightness == 30
+    assert lightener.brightness == None
     assert hass.states.get("light.test1").state == "off"
     assert hass.states.get("light.test2").state == "off"
 

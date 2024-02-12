@@ -107,6 +107,7 @@ class LightenerLight(LightGroup):
     """Represents a Lightener light."""
 
     _is_frozen = False
+    _prefered_brightness = None
 
     def __init__(
         self,
@@ -169,7 +170,11 @@ class LightenerLight(LightGroup):
         else:
             # Update the Lightener brightness level to the one being set.
             self._attr_brightness = brightness
-            self.async_schedule_update_ha_state()
+
+        if brightness is None:
+            brightness = self._prefered_brightness
+        else:
+            self._prefered_brightness = brightness
 
         self._is_frozen = True
 
@@ -208,18 +213,14 @@ class LightenerLight(LightGroup):
                 context=self._context,
             )
 
-            _LOGGER.debug(
-                "Service %s called for %s",
-                service,
-                entity.entity_id,
-            )
-
         self._is_frozen = False
         self.async_update_group_state()
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._is_frozen = True
+
+        self._prefered_brightness = self._attr_brightness
 
         await super().async_turn_off(**kwargs)
 
@@ -240,52 +241,46 @@ class LightenerLight(LightGroup):
         # Let the Group integration make its magic, which includes recalculating the brightness.
         super().async_update_group_state()
 
-        # Calculates the brighteness by checking if the current levels in al controlled lights
-        # preciselly match one of the possible values for this lightener.
-        levels = []
-        for entity_id in self._entity_ids:
-            state = self.hass.states.get(entity_id)
-
-            # State may return None if the entity is not available, so we ignore it.
-            if state is not None:
-                for entity in self._entities:
-                    if entity.entity_id == state.entity_id:
-                        if state.state == STATE_ON:
-                            entity_brightness = state.attributes.get(
-                                ATTR_BRIGHTNESS, 255
-                            )
-                        else:
-                            entity_brightness = 0
-
-                        if entity_brightness is not None:
-                            levels.append(
-                                entity.translate_brightness_back(entity_brightness)
-                            )
-                        else:
-                            levels.append([])
-
         common_level: set = None
 
-        # If the current lightener level is not present in the possible levels of the controlled lights.
-        if (
-            levels
-            and len(set([current_brightness]).intersection(*map(set, levels))) == 0
-        ):
-            # Build a list of levels which are common for all lights.
-            common_level = set.intersection(*map(set, levels))
+        if self.is_on:
+            # Calculates the brighteness by checking if the current levels in al controlled lights
+            # preciselly match one of the possible values for this lightener.
+            levels = []
+            for entity_id in self._entity_ids:
+                state = self.hass.states.get(entity_id)
+
+                # State may return None if the entity is not available, so we ignore it.
+                if state is not None:
+                    for entity in self._entities:
+                        if entity.entity_id == state.entity_id:
+                            if state.state == STATE_ON:
+                                entity_brightness = state.attributes.get(
+                                    ATTR_BRIGHTNESS, 255
+                                )
+                            else:
+                                entity_brightness = 0
+
+                            if entity_brightness is not None:
+                                levels.append(
+                                    entity.translate_brightness_back(entity_brightness)
+                                )
+                            else:
+                                levels.append([])
+
+            if levels:
+                # If the current lightener level is not present in the possible levels of the controlled lights.
+                if len({self._prefered_brightness}.intersection(*map(set, levels))) > 0:
+                    common_level = {self._prefered_brightness}
+                else:
+                    # Build a list of levels which are common for all lights.
+                    common_level = set.intersection(*map(set, levels))
 
         if common_level:
             # Use the common level if any was found.
             self._attr_brightness = common_level.pop()
         else:
-            # Do not change the brightness if there is no match for it.
-            self._attr_brightness = current_brightness
-
-        _LOGGER.debug(
-            "Lightener %s brightness level updated to %s",
-            self.entity_id,
-            self._attr_brightness,
-        )
+            self._attr_brightness = None
 
         # Lightener will always support brightness, no matter the features available in the group (they may be on/off only).
         if self._attr_color_mode == ColorMode.ONOFF:
