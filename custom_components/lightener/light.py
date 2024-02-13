@@ -146,7 +146,7 @@ class LightenerLight(LightGroup):
         self._entities = entities
 
         _LOGGER.debug(
-            "Created lightener: %s",
+            "Created lightener `%s`",
             config_data[CONF_FRIENDLY_NAME],
         )
 
@@ -175,6 +175,12 @@ class LightenerLight(LightGroup):
             brightness = self._prefered_brightness
         else:
             self._prefered_brightness = brightness
+
+        _LOGGER.debug(
+            "[Turn On] Attempting to set brightness of `%s` to `%s`",
+            self.entity_id,
+            brightness,
+        )
 
         self._is_frozen = True
 
@@ -213,6 +219,13 @@ class LightenerLight(LightGroup):
                 context=self._context,
             )
 
+            _LOGGER.debug(
+                "Service `%s` called for `%s` with `%s`",
+                service,
+                entity.entity_id,
+                entity_data,
+            )
+
         self._is_frozen = False
         self.async_update_group_state()
         self.async_write_ha_state()
@@ -224,6 +237,8 @@ class LightenerLight(LightGroup):
         self._prefered_brightness = self._attr_brightness
 
         await super().async_turn_off(**kwargs)
+
+        _LOGGER.debug("[Turn Off] Turned off `%s`", self.entity_id)
 
         self._is_frozen = False
         self.async_update_group_state()
@@ -267,6 +282,12 @@ class LightenerLight(LightGroup):
                             else:
                                 entity_brightness = 0
 
+                            _LOGGER.debug(
+                                "Current brightness of `%s` is `%s`",
+                                entity.entity_id,
+                                entity_brightness,
+                            )
+
                             if entity_brightness is not None:
                                 levels.append(
                                     entity.translate_brightness_back(entity_brightness)
@@ -288,6 +309,12 @@ class LightenerLight(LightGroup):
         else:
             self._attr_brightness = None
 
+        _LOGGER.debug(
+            "Setting the brightness of `%s` to `%s`",
+            self.entity_id,
+            self._attr_brightness,
+        )
+
         # Lightener will always support brightness, no matter the features available in the group
         # (they may be on/off only).
         if self._attr_color_mode == ColorMode.ONOFF:
@@ -308,6 +335,8 @@ class LightenerLight(LightGroup):
 
         if self._is_frozen:
             return
+
+        _LOGGER.debug("Writing state of `%s`", self.entity_id)
 
         super().async_write_ha_state()
 
