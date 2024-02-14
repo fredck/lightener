@@ -307,7 +307,7 @@ class LightenerLight(LightGroup):
             # Use the common level if any was found.
             self._attr_brightness = common_level.pop()
         else:
-            self._attr_brightness = None
+            self._attr_brightness = self._prefered_brightness if self.is_on else None
 
         _LOGGER.debug(
             "Setting the brightness of `%s` to `%s`",

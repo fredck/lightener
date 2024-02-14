@@ -292,10 +292,10 @@ async def test_lightener_light_async_update_group_state_no_match_no_change(
     test(1, 255, 129)
 
     # No matches
-    test(129, 1, None)
-    test(1, 254, None)
-    test(1, 1, None)
-    test(1, None, None)
+    test(129, 1, 150)
+    test(1, 254, 150)
+    test(1, 1, 150)
+    test(1, None, 150)
 
 
 @pytest.mark.parametrize(
