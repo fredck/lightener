@@ -28,6 +28,7 @@ from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
+from homeassistant.util.color import value_to_brightness
 
 from . import async_migrate_entry
 from .const import DOMAIN, TYPE_DIMMABLE, TYPE_ONOFF
@@ -56,7 +57,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 
 
 def _convert_percent_to_brightness(percent: int) -> int:
-    return math.ceil(255 * percent / 100)
+    return 0 if percent == 0 else value_to_brightness((1, 100), percent)
 
 
 async def async_setup_entry(
