@@ -13,8 +13,10 @@ from homeassistant.helpers.entity_registry import (
     async_get,
 )
 from homeassistant.helpers.selector import selector
+from homeassistant.util.color import brightness_to_value
 
-from .const import DOMAIN
+from .const import DOMAIN, TYPE_DIMMABLE, TYPE_ONOFF
+from .util import get_light_type
 
 
 class LightenerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -224,6 +226,25 @@ class LightenerFlow:
         light = self.local_data["current_light"]
         state = self.flow_handler.hass.states.get(light)
         placeholders["light_name"] = state.name
+
+        light_type = get_light_type(hass=self.flow_handler.hass, entity_id=light)
+
+        # Placeholder for the current brightness value (in percentage).
+        current_brightness = (
+            state.attributes.get("brightness", 0)
+            if light_type == TYPE_DIMMABLE
+            else 255
+            if light_type == TYPE_ONOFF and state.state == "on"
+            else 0
+        )
+
+        placeholders["current_brightness"] = (
+            f"{round(brightness_to_value((1, 100), current_brightness))}%"
+            if current_brightness
+            else "?"
+            if state.state == "on"
+            else "off"
+        )
 
         if user_input is None:
             # Load the previously configured data.

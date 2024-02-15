@@ -19,6 +19,7 @@
       },
       "light_configuration": {
         "title": "Konfigurovať \"{light_name}\"",
+        "description": "Current brightness: {current_brightness}",
         "data": {
           "brightness": "Mapovanie jasu"
         },
@@ -42,6 +43,7 @@
       },
       "light_configuration": {
         "title": "Konfigurovať \"{light_name}\"",
+        "description": "Current brightness: {current_brightness}",
         "data": {
           "brightness": "Mapovanie jasu"
         },

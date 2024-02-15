@@ -15,8 +15,6 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_TRANSITION,
     ColorMode,
-    brightness_supported,
-    get_supported_color_modes,
 )
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
 from homeassistant.config_entries import ConfigEntry
@@ -39,6 +37,7 @@ from homeassistant.util.color import value_to_brightness
 
 from . import async_migrate_entry
 from .const import DOMAIN, TYPE_DIMMABLE, TYPE_ONOFF
+from .util import get_light_type
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -485,23 +484,13 @@ class LightenerControlledLight:
                     else TYPE_DIMMABLE
                 )
 
+            the_type = None
+
             try:
-                supported_color_modes = get_supported_color_modes(
-                    self.hass, self.entity_id
-                )
+                the_type = get_light_type(self.hass, self.entity_id)
             except HomeAssistantError:
                 supported_color_modes = None
                 _LOGGER.warning("Entity `%s` was not found", self.entity_id)
-
-            the_type = (
-                (
-                    TYPE_DIMMABLE
-                    if brightness_supported(supported_color_modes)
-                    else TYPE_ONOFF
-                )
-                if supported_color_modes
-                else None
-            )
 
             _LOGGER.debug(
                 "Entity `%s` type is `%s` (old type: `%s`, supported color modes: `%s`)",

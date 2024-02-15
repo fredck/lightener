@@ -46,7 +46,10 @@ async def test_config_flow_steps(hass: HomeAssistant) -> None:
     assert result["type"] == "form"
     assert result["step_id"] == "light_configuration"
     assert result["last_step"] is True
-    assert result["description_placeholders"] == {"light_name": "test1"}
+    assert result["description_placeholders"] == {
+        "light_name": "test1",
+        "current_brightness": "off",
+    }
 
     assert get_required(result, "brightness") is False
 
