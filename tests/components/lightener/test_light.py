@@ -273,7 +273,7 @@ async def test_lightener_light_async_update_group_state_no_match_no_change(
     )
 
     def test(test1: int, test2: int, result: int):
-        lightener._prefered_brightness = 150  # pylint: disable=protected-access
+        lightener._attr_brightness = 150  # pylint: disable=protected-access
 
         hass.states.async_set(
             entity_id="light.test1", new_state="on", attributes={"brightness": test1}

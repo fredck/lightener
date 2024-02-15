@@ -11,7 +11,13 @@ from typing import Any
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.components.group.light import FORWARDED_ATTRIBUTES, LightGroup
-from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_TRANSITION, ColorMode
+from homeassistant.components.light import (
+    ATTR_BRIGHTNESS,
+    ATTR_TRANSITION,
+    ColorMode,
+    brightness_supported,
+    get_supported_color_modes,
+)
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -24,6 +30,7 @@ from homeassistant.const import (
     STATE_ON,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -228,8 +235,17 @@ class LightenerLight(LightGroup):
             )
 
         self._is_frozen = False
-        self.async_update_group_state()
-        self.async_write_ha_state()
+
+        # Define a coroutine as a ha task.
+        async def _async_refresh() -> None:
+            """Turn on all lights controlled by this Lightener."""
+            self.async_update_group_state()
+            self.async_write_ha_state()
+
+        # Schedule the task to run.
+        self.hass.async_create_task(
+            _async_refresh(), name="Lightener [turn_on refresh]"
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off all lights controlled by this Lightener."""
@@ -259,6 +275,9 @@ class LightenerLight(LightGroup):
 
         if self._is_frozen:
             return
+
+        was_off = not self.is_on
+        current_brightness = self._attr_brightness
 
         # Let the Group integration make its magic, which includes recalculating the brightness.
         super().async_update_group_state()
@@ -308,7 +327,13 @@ class LightenerLight(LightGroup):
             # Use the common level if any was found.
             self._attr_brightness = common_level.pop()
         else:
-            self._attr_brightness = self._prefered_brightness if self.is_on else None
+            self._attr_brightness = (
+                current_brightness
+                if self.is_on  # Do not change the brightness to avoid level jumping due to async children turn ons
+                else current_brightness
+                if was_off  # Moving from off to on, probably
+                else None
+            )
 
         _LOGGER.debug(
             "Setting the brightness of `%s` to `%s`",
@@ -442,19 +467,51 @@ class LightenerControlledLight:
     def type(self) -> str | None:
         """The entity type."""
 
-        # It may take some time between the initialization of this class and the effective availability of the entity.
-        # Therefore, we check the type on demand until we're able to figure it out at least once.
+        # TODO: Remove old_type logic before going out of beta.
+
         if self._type is None:
+            old_type = None
+
             state = self.hass.states.get(self.entity_id)
+
+            # It may take some time between the initialization of this class and the effective availability of the entity.
             if state is not None:
                 supported_color_modes = state.attributes.get("supported_color_modes")
-                self._type = (
+                old_type = (
                     TYPE_ONOFF
                     if supported_color_modes
                     and ColorMode.ONOFF in supported_color_modes
                     and len(supported_color_modes) == 1
                     else TYPE_DIMMABLE
                 )
+
+            try:
+                supported_color_modes = get_supported_color_modes(
+                    self.hass, self.entity_id
+                )
+            except HomeAssistantError:
+                supported_color_modes = None
+                _LOGGER.warning("Entity `%s` was not found", self.entity_id)
+
+            the_type = (
+                (
+                    TYPE_DIMMABLE
+                    if brightness_supported(supported_color_modes)
+                    else TYPE_ONOFF
+                )
+                if supported_color_modes
+                else None
+            )
+
+            _LOGGER.debug(
+                "Entity `%s` type is `%s` (old type: `%s`, supported color modes: `%s`)",
+                self.entity_id,
+                the_type,
+                old_type,
+                supported_color_modes,
+            )
+
+            self._type = the_type
 
         return self._type
 
