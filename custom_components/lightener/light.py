@@ -36,7 +36,7 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.util.color import value_to_brightness
 
 from . import async_migrate_entry
-from .const import DOMAIN, TYPE_DIMMABLE, TYPE_ONOFF
+from .const import DOMAIN, TYPE_ONOFF
 from .util import get_light_type
 
 _LOGGER = logging.getLogger(__name__)
@@ -227,9 +227,10 @@ class LightenerLight(LightGroup):
             )
 
             _LOGGER.debug(
-                "Service `%s` called for `%s` with `%s`",
+                "Service `%s` called for `%s` (%s) with `%s`",
                 service,
                 entity.entity_id,
+                entity.type,
                 entity_data,
             )
 
@@ -466,43 +467,10 @@ class LightenerControlledLight:
     def type(self) -> str | None:
         """The entity type."""
 
-        # TODO: Remove old_type logic before going out of beta.
-
-        if self._type is None:
-            old_type = None
-
-            state = self.hass.states.get(self.entity_id)
-
-            # It may take some time between the initialization of this class and the effective availability of the entity.
-            if state is not None:
-                supported_color_modes = state.attributes.get("supported_color_modes")
-                old_type = (
-                    TYPE_ONOFF
-                    if supported_color_modes
-                    and ColorMode.ONOFF in supported_color_modes
-                    and len(supported_color_modes) == 1
-                    else TYPE_DIMMABLE
-                )
-
-            the_type = None
-
-            try:
-                the_type = get_light_type(self.hass, self.entity_id)
-            except HomeAssistantError:
-                supported_color_modes = None
-                _LOGGER.warning("Entity `%s` was not found", self.entity_id)
-
-            _LOGGER.debug(
-                "Entity `%s` type is `%s` (old type: `%s`, supported color modes: `%s`)",
-                self.entity_id,
-                the_type,
-                old_type,
-                supported_color_modes,
-            )
-
-            self._type = the_type
-
-        return self._type
+        try:
+            return get_light_type(self.hass, self.entity_id)
+        except HomeAssistantError:
+            return None
 
     def translate_brightness(self, brightness: int) -> int:
         """Calculate the entitiy brightness for the give Lightener brightness level."""
