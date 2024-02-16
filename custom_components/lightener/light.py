@@ -279,6 +279,11 @@ class LightenerLight(LightGroup):
         was_off = not self.is_on
         current_brightness = self._attr_brightness
 
+        # Flag is this update is caused by this Lightener when calling turn_on.
+        is_lightener_change = False
+
+        current_state = self.hass.states.get(self.entity_id)
+
         # Let the Group integration make its magic, which includes recalculating the brightness.
         super().async_update_group_state()
 
@@ -295,6 +300,17 @@ class LightenerLight(LightGroup):
                 if state is not None:
                     for entity in self._entities:
                         if entity.entity_id == state.entity_id:
+                            # Check if the entity state change is caused by this Lightener.
+                            is_lightener_change = (
+                                True
+                                if is_lightener_change
+                                else (
+                                    state.context
+                                    and self._context
+                                    and state.context.id == self._context.id
+                                )
+                            )
+
                             if state.state == STATE_ON:
                                 entity_brightness = state.attributes.get(
                                     ATTR_BRIGHTNESS, 255
@@ -328,10 +344,10 @@ class LightenerLight(LightGroup):
             self._attr_brightness = common_level.pop()
         else:
             self._attr_brightness = (
-                current_brightness
-                if self.is_on  # Do not change the brightness to avoid level jumping due to async children turn ons
+                self._prefered_brightness
+                if is_lightener_change
                 else current_brightness
-                if was_off  # Moving from off to on, probably
+                if self.is_on or was_off
                 else None
             )
 
