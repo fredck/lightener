@@ -13,8 +13,13 @@ from custom_components.lightener.const import TYPE_DIMMABLE, TYPE_ONOFF
 from custom_components.lightener.light import (
     LightenerControlledLight,
     LightenerLight,
-    _convert_percent_to_brightness,
     async_setup_platform,
+    create_brightness_map,
+    create_reverse_brightness_map,
+    create_reverse_brightness_map_on_off,
+    prepare_brightness_config,
+    scale_ranged_value_to_int_range,
+    translate_config_to_brightness,
 )
 
 ###########################################################
@@ -202,7 +207,7 @@ async def test_lightener_light_async_update_group_state(
 
     lightener.async_update_group_state()
 
-    assert lightener.brightness == 129
+    assert lightener.brightness == 128
 
     hass.states.async_set(
         entity_id="light.test1", new_state="on", attributes={"brightness": 0}
@@ -211,7 +216,7 @@ async def test_lightener_light_async_update_group_state(
     lightener.async_update_group_state()
 
     assert lightener.is_on is True
-    assert lightener.brightness == 1
+    assert lightener.brightness == 0
 
 
 async def test_lightener_light_async_update_group_state_zero(
@@ -257,7 +262,7 @@ async def test_lightener_light_async_update_group_state_unavailable(
 
     lightener.async_update_group_state()
 
-    assert lightener.brightness == 129
+    assert lightener.brightness == 128
 
 
 async def test_lightener_light_async_update_group_state_no_match_no_change(
@@ -288,8 +293,8 @@ async def test_lightener_light_async_update_group_state_no_match_no_change(
         assert lightener.brightness == result
 
     # Matches
-    test(0, 26, 3)
-    test(1, 255, 129)
+    test(0, 29, 3)
+    test(1, 255, 128)
 
     # No matches
     test(129, 1, 150)
@@ -385,7 +390,7 @@ async def test_lightener_light_entity_calculated_levels(hass):
 
     assert light.levels[0] == 0
     assert light.levels[13] == 128
-    assert light.levels[25] == 246
+    assert light.levels[25] == 245
     assert light.levels[26] == 255
     assert light.levels[27] == 255
     assert light.levels[100] == 255
@@ -406,7 +411,7 @@ async def test_lightener_light_entity_calculated_levels(hass):
     assert light.levels[0] == 0
     assert light.levels[15] == 15
     assert light.levels[26] == 26
-    assert light.levels[27] == 29
+    assert light.levels[27] == 28
     assert light.levels[128] == 255
     assert light.levels[129] == 253
     assert light.levels[255] == 0
@@ -444,11 +449,11 @@ async def test_lightener_light_entity_calculated_to_lightner_levels(hass):
     )
 
     assert light.to_lightener_levels[0] == [0, 255]
-    assert light.to_lightener_levels[26] == [26, 243]
+    assert light.to_lightener_levels[26] == [26, 242]
     assert light.to_lightener_levels[255] == [128]
 
     assert light.to_lightener_levels[3] == [3, 254]
-    assert light.to_lightener_levels[10] == [10, 251]
+    assert light.to_lightener_levels[10] == [10, 250]
 
 
 @pytest.mark.parametrize(
@@ -476,7 +481,7 @@ async def test_lightener_light_entity_type(entity_id, expected_type, hass):
         (0, 0),
         (1, 10),
         (26, 255),
-        (39, 123),
+        (39, 122),
         (255, 0),
     ],
 )
@@ -487,7 +492,13 @@ async def test_lightener_light_entity_translate_brightness_dimmable(
 
     light = LightenerControlledLight(
         "light.test1",
-        {"brightness": {"10": "100", "20": "0", "100": "0"}},
+        {
+            "brightness": {
+                "10": "100",
+                "20": "0",
+                "100": "0",
+            }
+        },
         hass,
     )
 
@@ -554,20 +565,6 @@ async def test_lightener_light_entity_translate_brightness_back_float(hass):
 ### Other
 
 
-@pytest.mark.parametrize(
-    "percent, brightness",
-    [
-        (0, 0),
-        (10, 26),
-        (100, 255),
-    ],
-)
-def test_convert_percent_to_brightness(percent, brightness):
-    """Test the _convert_percent_to_brightness function."""
-
-    assert _convert_percent_to_brightness(percent) == brightness
-
-
 async def test_async_setup_platform(hass):
     """Test for platform setup."""
 
@@ -621,6 +618,211 @@ async def test_async_setup_platform(hass):
     assert light.extra_state_attributes["entity_id"][0] == "light.test2"
     assert controlled_light.entity_id == "light.test2"
     assert controlled_light.levels[255] == 26
+
+
+@pytest.mark.parametrize(
+    "config, expected_result",
+    [
+        # Normal configuration
+        (
+            {
+                "10": "50",
+                "20": "0",
+                "30": "100",
+            },
+            {
+                26: 128,
+                51: 0,
+                76: 255,
+            },
+        ),
+        # Empty configuration
+        ({}, {}),
+        # Zero values
+        ({"10": "0"}, {26: 0}),
+        # 100% values
+        ({"100": "100"}, {255: 255}),
+    ],
+)
+def test_translate_config_to_brightness(config, expected_result):
+    """Test the translate_config_to_brightness function."""
+
+    assert translate_config_to_brightness(config) == expected_result
+
+
+@pytest.mark.parametrize(
+    "config, expected_result",
+    [
+        # Normal configuration
+        (
+            {
+                "10": "50",
+                "20": "0",
+                "30": "100",
+            },
+            [
+                (0, 0),
+                (26, 128),
+                (51, 0),
+                (76, 255),
+                (255, 255),
+            ],
+        ),
+        # Empty configuration
+        (
+            {},
+            [
+                (0, 0),
+                (255, 255),
+            ],
+        ),
+        # 100% values
+        (
+            {
+                "1": "100",
+                "100": "50",
+            },
+            [
+                (0, 0),
+                (3, 255),
+                (255, 128),
+            ],
+        ),
+    ],
+)
+def test_prepare_brightness_config(config, expected_result):
+    """Test the prepare_brightness_config function."""
+    assert prepare_brightness_config(config) == expected_result
+
+
+@pytest.mark.parametrize(
+    "lightener_level, expected_entity_level",
+    [
+        (0, 0),
+        (10, 30),
+        (40, 0),
+        (80, 90),
+        (255, 255),
+        (5, 15),
+        (25, 15),
+        (60, 45),
+    ],
+)
+def test_create_brightness_map(lightener_level, expected_entity_level):
+    """Test the create_brightness_map function."""
+
+    config = [
+        (0, 0),
+        (10, 30),
+        (40, 0),
+        (80, 90),
+        (255, 255),
+    ]
+    brigtness_map = create_brightness_map(config)
+
+    assert brigtness_map[lightener_level] == expected_entity_level
+
+    # Check if the length is correct
+    assert len(brigtness_map) == 256
+
+
+@pytest.mark.parametrize(
+    "entity_level, expected_lightener_level_list",
+    [
+        (0, [0, 40]),
+        (15, [5, 25, 47]),
+        (30, [10, 53]),
+        (90, [80]),
+        (255, [255]),
+    ],
+)
+def test_create_reverse_brightness_map(entity_level, expected_lightener_level_list):
+    """Test the create_reverse_brightness_map function."""
+
+    config = [
+        (0, 0),
+        (10, 30),
+        (40, 0),
+        (80, 90),
+        (255, 255),
+    ]
+
+    levels = create_brightness_map(config)
+    reverse_brightness_map = create_reverse_brightness_map(config, levels)
+
+    assert reverse_brightness_map[entity_level] == expected_lightener_level_list
+
+    # Check if the length is correct
+    assert len(reverse_brightness_map) == 256
+
+
+def test_create_reverse_brightness_map_on_off():
+    """Test the create_reverse_brightness_map function."""
+
+    config = [
+        (0, 0),
+        (10, 30),
+        (40, 0),
+        (80, 90),
+        (255, 255),
+    ]
+
+    levels = create_brightness_map(config)
+    reverse_brightness_map = create_reverse_brightness_map(config, levels)
+    reverse_brightness_map_on_off = create_reverse_brightness_map_on_off(
+        reverse_brightness_map
+    )
+
+    # Expected off is a list with 0 and 40
+    expected_lightener_level_list_off = [0, 40]
+
+    # Expected on is a list that goes from 1 to 255, except 40
+    expected_lightener_level_list_on = list(range(1, 40)) + list(range(41, 256))
+
+    assert reverse_brightness_map_on_off[0] == expected_lightener_level_list_off
+
+    assert reverse_brightness_map_on_off[1] == expected_lightener_level_list_on
+    assert reverse_brightness_map_on_off[10] == expected_lightener_level_list_on
+    assert reverse_brightness_map_on_off[40] == expected_lightener_level_list_on
+    assert reverse_brightness_map_on_off[45] == expected_lightener_level_list_on
+    assert reverse_brightness_map_on_off[254] == expected_lightener_level_list_on
+    assert reverse_brightness_map_on_off[255] == expected_lightener_level_list_on
+
+    # Check if the length is correct
+    assert len(reverse_brightness_map) == 256
+
+
+@pytest.mark.parametrize(
+    "source_range, value, target_range, expected_result",
+    [
+        # Positive order
+        ((1, 255), 1, (1, 100), 1),
+        ((1, 255), 255, (1, 100), 100),
+        ((1, 255), 128, (1, 100), 50),
+        # Low target range
+        ((1, 255), 2, (1, 10), 1),
+        ((1, 255), 15, (1, 10), 1),
+        ((1, 255), 16, (1, 10), 2),
+        ((1, 255), 25, (1, 10), 2),
+        # Negative target order
+        ((1, 255), 1, (255, 1), 255),
+        ((1, 255), 255, (255, 1), 1),
+        ((1, 255), 128, (255, 1), 128),
+        # Negative source order
+        ((255, 1), 1, (1, 100), 100),
+        ((255, 1), 255, (1, 100), 1),
+        ((255, 1), 26, (1, 100), 90),
+    ],
+)
+def test_scale_ranged_value_to_int_range(
+    source_range, value, target_range, expected_result
+):
+    """Test the scale_ranged_value_to_int_range function."""
+
+    assert (
+        scale_ranged_value_to_int_range(source_range, target_range, value)
+        == expected_result
+    )
 
 
 # Issues

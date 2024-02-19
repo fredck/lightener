@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import logging
-import math
-from collections import OrderedDict
 from types import MappingProxyType
 from typing import Any
 
@@ -60,10 +58,6 @@ LIGHT_SCHEMA = vol.Schema(
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_LIGHTS): cv.schema_with_slug_keys(LIGHT_SCHEMA)}
 )
-
-
-def _convert_percent_to_brightness(percent: int) -> int:
-    return 0 if percent == 0 else value_to_brightness((1, 100), percent)
 
 
 async def async_setup_entry(
@@ -282,8 +276,6 @@ class LightenerLight(LightGroup):
         # Flag is this update is caused by this Lightener when calling turn_on.
         is_lightener_change = False
 
-        current_state = self.hass.states.get(self.entity_id)
-
         # Let the Group integration make its magic, which includes recalculating the brightness.
         super().async_update_group_state()
 
@@ -396,88 +388,18 @@ class LightenerControlledLight:
 
         self.entity_id = entity_id
         self.hass = hass
-        self._type = None
 
-        config_levels = {}
+        # Get the brightness configuration and prepare it for processing,
+        brightness_config = prepare_brightness_config(config.get("brightness", {}))
 
-        for lightener_level, entity_value in config.get("brightness", {}).items():
-            config_levels[
-                _convert_percent_to_brightness(int(lightener_level))
-            ] = _convert_percent_to_brightness(int(entity_value))
-
-        config_levels.setdefault(255, 255)
-
-        config_levels = OrderedDict(sorted(config_levels.items()))
-
-        # Start the level list with value 0 for level 0.
-        levels = [0]
-        levels_on_off = [0]
-
-        # List with all possible Lightener levels for a given entity level.
-        # Initializa it with a list from 0 to 255 having each entry an empty array.
-        to_lightener_levels = [[] for i in range(0, 256)]
-        to_lightener_levels_on_off = [[] for i in range(0, 256)]
-
-        previous_lightener_level = 0
-        previous_light_level = 0
-
-        # Fill all levels with the calculated values between the ranges.
-        for lightener_level, light_level in config_levels.items():
-            # Calculate all possible levels between the configured ranges
-            # to be used during translation (lightener -> entity)
-            for i in range(previous_lightener_level + 1, lightener_level):
-                value_at_current_level = math.ceil(
-                    previous_light_level
-                    + (light_level - previous_light_level)
-                    * (i - previous_lightener_level)
-                    / (lightener_level - previous_lightener_level)
-                )
-                levels.append(value_at_current_level)
-                to_lightener_levels[value_at_current_level].append(i)
-
-                # On/Off entities have only two possible levels: 0 (off) and 255 (on).
-                levels_on_off.append(255 if value_at_current_level > 0 else 0)
-                to_lightener_levels_on_off[
-                    255 if value_at_current_level > 0 else 0
-                ].append(i)
-
-            # To account for rounding, we use the configured values directly.
-            levels.append(light_level)
-            to_lightener_levels[light_level].append(lightener_level)
-
-            levels_on_off.append(255 if light_level > 0 else 0)
-            to_lightener_levels_on_off[255 if light_level > 0 else 0].append(
-                lightener_level
-            )
-
-            # Do the reverse calculation for the oposite translation direction (entity -> lightener)
-            for i in range(
-                previous_light_level,
-                light_level,
-                1 if previous_light_level < light_level else -1,
-            ):
-                value_at_current_level = math.ceil(
-                    previous_lightener_level
-                    + (lightener_level - previous_lightener_level)
-                    * (i - previous_light_level)
-                    / (light_level - previous_light_level)
-                )
-
-                # Since the same entity level can happen more than once (e.g. "50:100, 100:0") we
-                # create a list with all possible lightener levels at this (i) entity brightness.
-                if value_at_current_level not in to_lightener_levels[i]:
-                    to_lightener_levels[i].append(value_at_current_level)
-                    to_lightener_levels_on_off[
-                        255 if value_at_current_level > 0 else 0
-                    ].append(value_at_current_level)
-
-            previous_lightener_level = lightener_level
-            previous_light_level = light_level
-
-        self.levels = levels
-        self.to_lightener_levels = to_lightener_levels
-        self.levels_on_off = levels_on_off
-        self.to_lightener_levels_on_off = to_lightener_levels_on_off
+        # Create the brightness conversion maps (from lightener to entity and from entity to lightener).
+        self.levels = create_brightness_map(brightness_config)
+        self.to_lightener_levels = create_reverse_brightness_map(
+            brightness_config, self.levels
+        )
+        self.to_lightener_levels_on_off = create_reverse_brightness_map_on_off(
+            self.to_lightener_levels
+        )
 
     @property
     def type(self) -> str | None:
@@ -491,10 +413,12 @@ class LightenerControlledLight:
     def translate_brightness(self, brightness: int) -> int:
         """Calculate the entitiy brightness for the give Lightener brightness level."""
 
-        if self.type == TYPE_ONOFF:
-            return self.levels_on_off[int(brightness)]
+        level = self.levels.get(int(brightness))
 
-        return self.levels[int(brightness)]
+        if self.type == TYPE_ONOFF:
+            return 0 if level == 0 else 255
+
+        return level
 
     def translate_brightness_back(self, brightness: int) -> list[int]:
         """Calculate all possible Lightener brightness levels for a give entity brightness."""
@@ -502,7 +426,124 @@ class LightenerControlledLight:
         if brightness is None:
             return []
 
+        levels = self.to_lightener_levels.get(int(brightness))
+
         if self.type == TYPE_ONOFF:
             return self.to_lightener_levels_on_off[int(brightness)]
 
-        return self.to_lightener_levels[int(brightness)]
+        return levels
+
+
+def translate_config_to_brightness(config: dict) -> dict:
+    """Create a copy of config converting the 0-100 range to 1-255.
+
+    Convert the values to integers since the original values are strings.
+    """
+
+    return {
+        value_to_brightness((1, 100), int(k)): 0
+        if int(v) == 0
+        else value_to_brightness((1, 100), int(v))
+        for k, v in config.items()
+    }
+
+
+def prepare_brightness_config(config: dict) -> dict:
+    """Convert the brightness configuration to a list of tuples and sorts it by the lightener level.
+
+    Also add the default 0 and 255 levels if they are not present.
+    """
+
+    config = translate_config_to_brightness(config)
+
+    # Zero must always be zero.
+    config[0] = 0
+
+    # If the maximum level is not present, add it.
+    config.setdefault(255, 255)
+
+    # Transform the dictionary into a list of tuples and sort it by the lightener level.
+    config = sorted(config.items())
+
+    return config
+
+
+def create_brightness_map(config: list) -> dict:
+    """Create a mapping of lightener levels to entity levels."""
+
+    brightness_map = {0: 0}
+
+    for i in range(1, len(config)):
+        start, end = config[i - 1][0], config[i][0]
+        start_value, end_value = config[i - 1][1], config[i][1]
+        for j in range(start + 1, end + 1):
+            brightness_map[j] = scale_ranged_value_to_int_range(
+                (start, end), (start_value, end_value), j
+            )
+
+    return brightness_map
+
+
+def create_reverse_brightness_map(config: list, lightener_levels: dict) -> dict:
+    """Create a map with all entity level (from 0 to 255) to all possible lightener levels at each entity level.
+
+    There can be multiple lightener levels for a single entity level.
+    """
+
+    # Initialize with all levels from 0 to 255.
+    reverse_brightness_map = {i: [] for i in range(256)}
+
+    # Initialize entries with all lightener levels (it goes from 0 to 255)
+    for k, v in lightener_levels.items():
+        reverse_brightness_map[v].append(k)
+
+    # Now fill the gaps in the map by looping though the configured entity ranges
+    for i in range(1, len(config)):
+        start, end = config[i - 1][0], config[i][0]
+        start_value, end_value = config[i - 1][1], config[i][1]
+
+        # If there is an entity range to be covered
+        if start_value != end_value:
+            order = 1 if start_value < end_value else -1
+
+            # Loop through the entity range
+            for j in range(start_value, end_value + order, order):
+                entity_level = scale_ranged_value_to_int_range(
+                    (start_value, end_value), (start, end), j
+                )
+                # If the entry is not yet present for into that level, add it.
+                if entity_level not in reverse_brightness_map[j]:
+                    reverse_brightness_map[j].append(entity_level)
+
+    return reverse_brightness_map
+
+
+def create_reverse_brightness_map_on_off(reverse_map: dict) -> dict:
+    """Create a reversed map dedicated to on/off lights."""
+
+    # Build the "on" state out of all levels which are not in the "off" state.
+    on_levels = [i for i in range(1, 256) if i not in reverse_map[0]]
+
+    # The "on" levels are possible for all non-zero levels.
+    reverse_map_on_off = {i: on_levels for i in range(1, 256)}
+
+    # The "off" matches the normal reverse map.
+    reverse_map_on_off[0] = reverse_map[0]
+
+    return reverse_map_on_off
+
+
+def scale_ranged_value_to_int_range(
+    source_range: tuple[float, float],
+    target_range: tuple[float, float],
+    value: float,
+) -> int:
+    """Scale a value from one range to another and return an integer."""
+
+    # Unpack the original and target ranges
+    (a, b) = source_range
+    (c, d) = target_range
+
+    # Calculate the conversion
+    y = c + ((value - a) * (d - c)) / (b - a)
+    return round(y)
