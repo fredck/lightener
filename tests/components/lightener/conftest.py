@@ -31,11 +31,15 @@ async def setup_test_lights(hass: HomeAssistant):
             "turn_off": None,
             "set_level": None,
         }
-        for test in ["test1", "test2", "test_onoff"]
+        for test in ["test1", "test2", "test_onoff", "test_temp"]
     }
 
     # Make test_onoff support on/off only
     del template_lights["test_onoff"]["set_level"]
+
+    # Makte test_temp support rgb and temperature
+    template_lights["test_temp"]["set_rgb"] = None
+    template_lights["test_temp"]["set_temperature"] = None
 
     await async_setup_component(
         hass,

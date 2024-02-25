@@ -151,6 +151,47 @@ class LightenerLight(LightGroup):
             config_data[CONF_FRIENDLY_NAME],
         )
 
+    @property
+    def color_mode(self) -> str:
+        """Return the color mode of the light."""
+
+        if not self.is_on:
+            return None
+
+        # If the controlled lights are on/off only, we force the color mode to BRIGHTNESS
+        # since Lightner always support it.
+        if self._attr_color_mode == ColorMode.ONOFF:
+            return ColorMode.BRIGHTNESS
+
+        # The group may calculate the color mode as UNKNOWN if any of the controlled lights is UNKNOWN.
+        # We don't want that, so we force it to BRIGHTNESS.
+        if self._attr_color_mode == ColorMode.UNKNOWN:
+            return ColorMode.BRIGHTNESS
+
+        return self._attr_color_mode
+
+    @property
+    def supported_color_modes(self) -> set[str] | None:
+        """Flag supported color modes."""
+
+        color_modes = super().supported_color_modes or set()
+
+        # We support BRIGHNESS if the controlled lights are not on/off only.
+        color_modes.discard(ColorMode.ONOFF)
+
+        if len(color_modes) == 0:
+            # As a minimum, we support the current color mode, or default to BRIGHTNESS.
+            if (
+                self.color_mode
+                and self.color_mode != ColorMode.UNKNOWN
+                and self.color_mode != ColorMode.ONOFF
+            ):
+                color_modes.add(self.color_mode)
+            else:
+                color_modes.add(ColorMode.BRIGHTNESS)
+
+        return color_modes
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Forward the turn_on command to all controlled lights."""
 
@@ -349,20 +390,6 @@ class LightenerLight(LightGroup):
             self._attr_brightness,
         )
 
-        # Lightener will always support brightness, no matter the features available in the group
-        # (they may be on/off only).
-        if self._attr_color_mode == ColorMode.ONOFF:
-            self._attr_color_mode = ColorMode.BRIGHTNESS
-
-        if self._attr_supported_color_modes:
-            if ColorMode.ONOFF in self._attr_supported_color_modes:
-                self._attr_supported_color_modes.remove(ColorMode.ONOFF)
-        else:
-            self._attr_supported_color_modes = set()
-
-        if len(self._attr_supported_color_modes) == 0:
-            self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
-
     @callback
     def async_write_ha_state(self) -> None:
         """Write the state to the state machine."""
@@ -370,7 +397,11 @@ class LightenerLight(LightGroup):
         if self._is_frozen:
             return
 
-        _LOGGER.debug("Writing state of `%s`", self.entity_id)
+        _LOGGER.debug(
+            "Writing state of `%s` with brightness `%s`",
+            self.entity_id,
+            self._attr_brightness,
+        )
 
         super().async_write_ha_state()
 

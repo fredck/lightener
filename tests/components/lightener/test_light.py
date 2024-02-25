@@ -168,6 +168,99 @@ async def test_lightener_light_turn_on_go_off_if_brightness_0_transition(
     )
 
 
+async def test_lightener_light_color_mode_xy(hass: HomeAssistant, create_lightener):
+    """Test that Lightener inherits the color mode of the controlled lights."""
+
+    lightener: LightenerLight = await create_lightener(
+        config={
+            "friendly_name": "Test",
+            "entities": {"light.test1": {}},
+        }
+    )
+
+    hass.states.async_set(
+        entity_id="light.test1",
+        new_state="on",
+        attributes={"color_mode": ColorMode.XY},
+    )
+
+    await lightener.async_update_ha_state()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("light.test1").attributes["color_mode"] == ColorMode.XY
+
+    assert lightener.color_mode == ColorMode.XY
+    assert lightener.supported_color_modes == {ColorMode.XY}
+
+
+async def test_lightener_light_color_mode_onoff(hass: HomeAssistant, create_lightener):
+    """Test that Lightener keeps its color mode to BRIGHTNESS with an ONOFF controlled light."""
+
+    lightener: LightenerLight = await create_lightener(
+        config={
+            "friendly_name": "Test",
+            "entities": {"light.test_onoff": {}},
+        }
+    )
+
+    hass.states.async_set(
+        entity_id="light.test_onoff",
+        new_state="on",
+        attributes={"color_mode": ColorMode.ONOFF},
+    )
+
+    await lightener.async_turn_on(brightness=1)
+    await hass.async_block_till_done()
+
+    assert lightener.color_mode == ColorMode.BRIGHTNESS
+    assert lightener.supported_color_modes == {ColorMode.BRIGHTNESS}
+
+    assert (
+        hass.states.get("light.test_onoff").attributes["color_mode"] == ColorMode.ONOFF
+    )
+
+    # Assert that the color_mode goes to null when the light is turned off
+    await lightener.async_turn_off()
+    await hass.async_block_till_done()
+
+    assert lightener.color_mode is None
+    assert lightener.supported_color_modes == {ColorMode.BRIGHTNESS}
+
+
+async def test_lightener_light_color_mode_unknown(
+    hass: HomeAssistant, create_lightener
+):
+    """Test that Lightener keeps its color mode to BRIGHTNESS with a controlled light that has color_mode UNKNOWN."""
+
+    lightener: LightenerLight = await create_lightener(
+        config={
+            "friendly_name": "Test",
+            "entities": {"light.test_temp": {}},
+        }
+    )
+
+    hass.states.async_set(
+        entity_id="light.test_temp",
+        new_state="on",
+        attributes={"color_mode": ColorMode.UNKNOWN},
+    )
+
+    await lightener.async_turn_on(brightness=1)
+    await hass.async_block_till_done()
+
+    assert lightener.color_mode == ColorMode.BRIGHTNESS
+
+    assert (
+        hass.states.get("light.test_temp").attributes["color_mode"] == ColorMode.UNKNOWN
+    )
+
+    # Assert that the color_mode goes to null when the light is turned off
+    await lightener.async_turn_off()
+    await hass.async_block_till_done()
+
+    assert lightener.color_mode is None
+
+
 async def test_lightener_light_async_update_group_state(
     hass: HomeAssistant, create_lightener
 ):
