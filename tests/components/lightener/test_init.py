@@ -9,7 +9,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lightener import (
     async_migrate_entry,
-    async_setup_entry,
     async_unload_entry,
 )
 from custom_components.lightener.config_flow import LightenerConfigFlow
@@ -29,7 +28,7 @@ async def test_async_setup_entry(hass):
     )
     config_entry.add_to_hass(hass)
 
-    assert await async_setup_entry(hass, config_entry)
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     assert "lightener.light" in hass.config.components
 
@@ -72,6 +71,9 @@ async def test_migrate_entry_current(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         data={},
         source="user",
+        unique_id=None,
+        options=None,
+        discovery_keys=[],
     )
 
     data = config_entry.data
@@ -105,6 +107,9 @@ async def test_migrate_entry_v1(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         data=config_v1,
         source="user",
+        unique_id=None,
+        options=None,
+        discovery_keys=[],
     )
 
     mock = Mock()
@@ -114,48 +119,6 @@ async def test_migrate_entry_v1(hass: HomeAssistant) -> None:
 
     assert mock.call_count == 1
     assert mock.call_args.kwargs.get("data") == {
-        "friendly_name": "Test",
-        "entities": {
-            "light.test1": {"brightness": {"10": "20", "30": "40"}},
-            "light.test2": {"brightness": {"50": "60", "70": "80"}},
-        },
-    }
-
-
-async def test_migrate_entry_v1_no_update_hass(hass: HomeAssistant) -> None:
-    """Test is the migration does nothing for an up-to-date configuration."""
-
-    config_v1 = {
-        "friendly_name": "Test",
-        "entities": {
-            "light.test1": {
-                "10": "20",
-                "30": "40",
-            },
-            "light.test2": {
-                "50": "60",
-                "70": "80",
-            },
-        },
-    }
-
-    config_entry = ConfigEntry(
-        version=1,
-        minor_version=1,
-        title="lightener",
-        domain=DOMAIN,
-        data=config_v1,
-        source="user",
-    )
-
-    mock = Mock()
-
-    with patch.object(hass.config_entries, "async_update_entry") as mock:
-        assert await async_migrate_entry(hass, config_entry, False) is True
-
-    assert mock.call_count == 0
-
-    assert config_entry.data == {
         "friendly_name": "Test",
         "entities": {
             "light.test1": {"brightness": {"10": "20", "30": "40"}},
@@ -174,9 +137,12 @@ async def test_migrate_unkown_version(hass: HomeAssistant) -> None:
         domain=DOMAIN,
         data={},
         source="user",
+        unique_id=None,
+        options=None,
+        discovery_keys=[],
     )
 
     with patch.object(logging.Logger, "error") as mock:
-        assert await async_migrate_entry(hass, config_entry, False) is False
+        assert await async_migrate_entry(hass, config_entry) is False
 
     mock.assert_called_once_with('Unknow configuration version "%i"', 1000)

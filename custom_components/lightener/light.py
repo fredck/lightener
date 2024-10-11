@@ -33,7 +33,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.util.color import value_to_brightness
 
-from . import async_migrate_entry
+from . import async_migrate_data, async_migrate_entry
 from .const import DOMAIN, TYPE_ONOFF
 from .util import get_light_type
 
@@ -85,18 +85,7 @@ async def async_setup_platform(
     lights = []
 
     for object_id, entity_config in config[CONF_LIGHTS].items():
-        entry = ConfigEntry(
-            version=1,
-            minor_version=1,
-            domain=DOMAIN,
-            data=entity_config,
-            source="user",
-            title="",
-        )
-
-        await async_migrate_entry(hass, entry, False)
-
-        data = dict(entry.data)
+        data = await async_migrate_data(entity_config, 1)
         data["entity_id"] = object_id
 
         lights.append(LightenerLight(hass, data))
