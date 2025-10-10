@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 import asyncio
+import logging
 from types import MappingProxyType
 from typing import Any
 
@@ -245,21 +245,25 @@ class LightenerLight(LightGroup):
                 entity_data[ATTR_ENTITY_ID] = entity.entity_id
 
                 # Submit the service call and await it concurrently with the group.
-                task = group.create_task(self.hass.services.async_call(
-                    LIGHT_DOMAIN,
-                    service,
-                    entity_data,
-                    blocking=True,
-                    context=self._context,
-                ))
+                task = group.create_task(
+                    self.hass.services.async_call(
+                        LIGHT_DOMAIN,
+                        service,
+                        entity_data,
+                        blocking=True,
+                        context=self._context,
+                    )
+                )
 
-                task.add_done_callback(lambda _: _LOGGER.debug(
-                    "Service `%s` called for `%s` (%s) with `%s`",
-                    service,
-                    entity.entity_id,
-                    entity.type,
-                    entity_data,
-                ))
+                task.add_done_callback(
+                    lambda _t, s=service, ent=entity, d=entity_data: _LOGGER.debug(
+                        "Service `%s` called for `%s` (%s) with `%s`",
+                        s,
+                        ent.entity_id,
+                        ent.type,
+                        d,
+                    )
+                )
 
         self._is_frozen = False
 
