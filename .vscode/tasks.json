@@ -22,7 +22,7 @@
         {
             "label": "Install requirements.txt dependencies",
             "type": "shell",
-            "command": "pip install -r requirements.txt",
+            "command": ".venv/bin/python -m pip install -r requirements.txt",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -30,6 +30,28 @@
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always"
+            }
+        },
+        {
+            "label": "Setup dev environment (.venv)",
+            "type": "shell",
+            "command": "scripts/setup",
+            "group": "build",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always"
+            }
+        },
+        {
+            "label": "Run Home Assistant",
+            "type": "shell",
+            "command": "scripts/develop",
+            "group": "build",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
             }
         }
     ]

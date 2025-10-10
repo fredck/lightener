@@ -1,8 +1,29 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-python3 -m pip install --upgrade pip
-python3 -m pip install --requirement requirements.txt
+DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+
+apt-get install -y --no-install-recommends build-essential
+apt-get install -y --no-install-recommends git
+
+# Create venv if missing
+if [[ ! -d .venv ]]; then
+	python3 -m venv .venv
+fi
+
+# Upgrade pip in venv and install deps
+
+. .venv/bin/activate
+
+# Ensure pip exists in the venv (some images create a stub without the module)
+if ! python -m pip --version >/dev/null 2>&1; then
+	python -m ensurepip --upgrade || true
+fi
+
+python -m pip install --upgrade pip wheel
+python -m pip install --requirement requirements.txt

@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+if [[ ! -d .venv ]]; then
+    echo "Virtualenv not found. Run scripts/setup first." >&2
+    exit 1
+fi
+
+. .venv/bin/activate
+
 # Create config dir if not present
 if [[ ! -d "${PWD}/config" ]]; then
-    mkdir -p "${PWD}/config"
-    hass --config "${PWD}/config" --script ensure_config
+        mkdir -p "${PWD}/config"
+        python -m homeassistant --config "${PWD}/config" --script ensure_config
 fi
 
 # Set the path to custom_components
 ## This let's us have the structure we want <root>/custom_components/lightener
 ## while at the same time have Home Assistant configuration inside <root>/config
 ## without resulting to symlinks.
-export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
+export PYTHONPATH="${PYTHONPATH-}:${PWD}/custom_components"
 
 # Start Home Assistant
-hass --config "${PWD}/config" --debug
+python -m homeassistant --config "${PWD}/config" --debug

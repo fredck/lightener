@@ -1,6 +1,6 @@
 {
   "name": "Lightener Dev Container",
-  "image": "python:3.12-bullseye",
+  "image": "python:3.13-slim",
   "postCreateCommand": "scripts/setup",
   "forwardPorts": [
     8123
@@ -23,7 +23,8 @@
         "redhat.vscode-yaml"
       ],
       "settings": {
-        "python.pythonPath": "/usr/bin/python3",
+        "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
+        "python.terminal.activateEnvironment": true,
         "terminal.integrated.defaultProfile.linux": "bash",
         "terminal.integrated.profiles.linux": {
           "bash": {

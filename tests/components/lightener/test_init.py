@@ -74,6 +74,7 @@ async def test_migrate_entry_current(hass: HomeAssistant) -> None:
         unique_id=None,
         options=None,
         discovery_keys=[],
+        subentries_data={},
     )
 
     data = config_entry.data
@@ -110,6 +111,7 @@ async def test_migrate_entry_v1(hass: HomeAssistant) -> None:
         unique_id=None,
         options=None,
         discovery_keys=[],
+        subentries_data={},
     )
 
     mock = Mock()
@@ -140,6 +142,7 @@ async def test_migrate_unkown_version(hass: HomeAssistant) -> None:
         unique_id=None,
         options=None,
         discovery_keys=[],
+        subentries_data={},
     )
 
     with patch.object(logging.Logger, "error") as mock:
