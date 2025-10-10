@@ -6,24 +6,63 @@ cd "$(dirname "$0")/.."
 
 DEBIAN_FRONTEND=noninteractive
 
+echo "[setup] Updating apt cache and installing base packages..."
 apt-get update
 
-apt-get install -y --no-install-recommends build-essential
-apt-get install -y --no-install-recommends git
+# Core build and tooling
+apt-get install -y --no-install-recommends \
+	ca-certificates \
+	curl \
+	git \
+	openssh-client \
+	build-essential \
+	pkg-config \
+	cmake \
+	autoconf
 
-# Create venv if missing
-if [[ ! -d .venv ]]; then
-	python3 -m venv .venv
+# HA-like optional libs (safe to install; used by some integrations/tests)
+apt-get install -y --no-install-recommends \
+	bluez \
+	ffmpeg \
+	libudev-dev \
+	libavformat-dev \
+	libavcodec-dev \
+	libavdevice-dev \
+	libavutil-dev \
+	libgammu-dev \
+	libswscale-dev \
+	libswresample-dev \
+	libavfilter-dev \
+	libpcap-dev \
+	libturbojpeg0 \
+	libyaml-dev \
+	libxml2
+
+# Pre-create .ssh with safe permissions (useful for mounting keys)
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+
+echo "[setup] Installing uv (Python toolchain manager)..."
+if ! command -v uv >/dev/null 2>&1; then
+	# Install uv to ~/.local/bin/uv
+	curl -fsSL https://astral.sh/uv/install.sh | sh
 fi
 
-# Upgrade pip in venv and install deps
-
-. .venv/bin/activate
-
-# Ensure pip exists in the venv (some images create a stub without the module)
-if ! python -m pip --version >/dev/null 2>&1; then
-	python -m ensurepip --upgrade || true
+# Ensure uv is on PATH
+export PATH="$HOME/.local/bin:$PATH"
+if [[ -d "$HOME/.cargo/bin" ]]; then
+	export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-python -m pip install --upgrade pip wheel
-python -m pip install --requirement requirements.txt
+echo "[setup] Ensuring Python is available via uv..."
+uv python install 3.13.2
+
+echo "[setup] Creating/Using virtual environment at .venv..."
+uv venv .venv
+
+echo "[setup] Installing Python dependencies with uv pip..."
+uv pip install -r requirements.txt
+
+echo "[setup] Cleaning apt cache..."
+apt-get clean
+rm -rf /var/lib/apt/lists/*

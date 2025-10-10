@@ -1,6 +1,6 @@
 {
   "name": "Lightener Dev Container",
-  "image": "python:3.13-slim",
+  "image": "mcr.microsoft.com/vscode/devcontainers/base:debian",
   "postCreateCommand": "scripts/setup",
   "forwardPorts": [
     8123
