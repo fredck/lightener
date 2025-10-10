@@ -22,6 +22,54 @@ from custom_components.lightener.light import (
     translate_config_to_brightness,
 )
 
+
+async def test_turn_on_resilient_to_single_failure(
+    hass: HomeAssistant, create_lightener
+):
+    """Ensure a failure in one entity service call does not cancel other calls."""
+
+    # Create a lightener with two lights
+    lightener: LightenerLight = await create_lightener(
+        config={
+            "friendly_name": "Test",
+            "entities": {
+                "light.test1": {},
+                "light.test2": {},
+            },
+        }
+    )
+
+    calls: list[tuple] = []
+
+    # Capture original class method so successful calls can delegate
+    orig_async_call = ServiceRegistry.async_call
+
+    async def fake_async_call(self, domain, service, data, blocking=True, context=None):
+        calls.append((domain, service, data.get(ATTR_ENTITY_ID)))
+        if data.get(ATTR_ENTITY_ID) == "light.test1":
+            raise RuntimeError("boom")
+        return await orig_async_call(
+            self, domain, service, data, blocking=blocking, context=context
+        )
+
+    # Patch the class method with autospec so `self` is passed
+    with patch.object(
+        ServiceRegistry, "async_call", side_effect=fake_async_call, autospec=True
+    ):
+        await lightener.async_turn_on(brightness=128)
+        await hass.async_block_till_done()
+
+    # Both calls were attempted (order not guaranteed due to concurrency)
+    attempted = sorted([c[2] for c in calls])
+    assert attempted == ["light.test1", "light.test2"]
+
+    # light.test1 failed
+    assert hass.states.get("light.test1").state == "off"
+
+    # light.test2 should have ended up on despite light.test1 failing
+    assert hass.states.get("light.test2").state == "on"
+
+
 ###########################################################
 ### LightenerLight class only tests
 
