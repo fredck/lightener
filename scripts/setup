@@ -2,7 +2,11 @@
 
 set -euo pipefail
 
+# Change to repo root
 cd "$(dirname "$0")/.."
+
+# This should match the version used by HA core
+PY_VERSION=${PY_VERSION:-3.13.2}
 
 DEBIAN_FRONTEND=noninteractive
 
@@ -54,14 +58,14 @@ if [[ -d "$HOME/.cargo/bin" ]]; then
 	export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
-echo "[setup] Ensuring Python is available via uv..."
-uv python install 3.13.2
+echo "[setup] Ensuring Python ${PY_VERSION} is available..."
+uv python install "${PY_VERSION}"
 
-echo "[setup] Creating/Using virtual environment at .venv..."
-uv venv .venv
+echo "[setup] Creating fresh virtual environment at .venv..."
+uv venv --clear --python "${PY_VERSION}" .venv
 
-echo "[setup] Installing Python dependencies with uv pip..."
-uv pip install -r requirements.txt
+echo "[setup] Installing dependencies..."
+uv pip install --python .venv/bin/python -r requirements.txt
 
 echo "[setup] Cleaning apt cache..."
 apt-get clean
