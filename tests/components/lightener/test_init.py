@@ -1,10 +1,15 @@
 """Tests for __init__."""
 
 import logging
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.entity_registry import (
+    async_get as async_get_entity_registry,
+)
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.lightener import (
@@ -114,13 +119,11 @@ async def test_migrate_entry_v1(hass: HomeAssistant) -> None:
         subentries_data={},
     )
 
-    mock = Mock()
-
-    with patch.object(hass.config_entries, "async_update_entry") as mock:
+    with patch.object(hass.config_entries, "async_update_entry") as update_mock:
         assert await async_migrate_entry(hass, config_entry) is True
 
-    assert mock.call_count == 1
-    assert mock.call_args.kwargs.get("data") == {
+    assert update_mock.call_count == 1
+    assert update_mock.call_args.kwargs.get("data") == {
         "friendly_name": "Test",
         "entities": {
             "light.test1": {"brightness": {"10": "20", "30": "40"}},
@@ -149,3 +152,39 @@ async def test_migrate_unkown_version(hass: HomeAssistant) -> None:
         assert await async_migrate_entry(hass, config_entry) is False
 
     mock.assert_called_once_with('Unknow configuration version "%i"', 1000)
+
+
+async def test_remove_device(
+    hass: HomeAssistant, hass_ws_client, create_lightener
+) -> None:
+    """Ensure HA can remove the Lightener device."""
+
+    # Create a Lightener via the helper so a device and entity are registered.
+    lightener = await create_lightener()
+
+    # Find the created entity and its device id.
+    er = async_get_entity_registry(hass)
+    entity_entry = er.async_get(lightener.entity_id)
+    assert entity_entry is not None
+    assert entity_entry.device_id is not None
+    device_id = entity_entry.device_id
+    assert entity_entry.config_entry_id is not None
+    config_entry_id = entity_entry.config_entry_id
+
+    # Ensure the config component is set up so it registers the device_registry websocket commands.
+    assert await async_setup_component(hass, "config", {})
+    await hass.async_block_till_done()
+
+    # Call the websocket API to remove the config entry from the device.
+    ws = await hass_ws_client(hass)
+    ws_result = await ws.remove_device(device_id, config_entry_id)
+
+    # It should succeed and return a result payload.
+    assert ws_result["type"] == "result"
+    assert ws_result["success"] is True
+
+    # And the device should no longer reference this config entry.
+    dev_reg = dr.async_get(hass)
+    device_entry = dev_reg.async_get(device_id)
+    if device_entry is not None:
+        assert config_entry_id not in device_entry.config_entries

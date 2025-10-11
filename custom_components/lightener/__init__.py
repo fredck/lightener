@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceEntry
 
 from .config_flow import LightenerConfigFlow
 
@@ -78,7 +79,9 @@ async def async_migrate_data(
     return dict(data)
 
 
-async def async_remove_config_entry_device() -> bool:
+async def async_remove_config_entry_device(
+    _hass: HomeAssistant, _config_entry: ConfigEntry, _device_entry: DeviceEntry
+) -> bool:
     """Remove a config entry from a device."""
 
     return True
