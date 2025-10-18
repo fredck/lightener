@@ -61,8 +61,23 @@ fi
 echo "[setup] Ensuring Python ${PY_VERSION} is available..."
 uv python install "${PY_VERSION}"
 
-echo "[setup] Creating fresh virtual environment at .venv..."
-uv venv --clear --python "${PY_VERSION}" .venv
+RECREATE_VENV=0
+if [[ ! -x ".venv/bin/python" ]]; then
+	RECREATE_VENV=1
+else
+	# Get current Python version in the existing venv
+	CURRENT_PY_VERSION=$(.venv/bin/python -c 'import platform; print(platform.python_version())' || echo "")
+	if [[ "${CURRENT_PY_VERSION}" != "${PY_VERSION}" ]]; then
+		RECREATE_VENV=1
+	fi
+fi
+
+if [[ ${RECREATE_VENV} -eq 1 ]]; then
+	echo "[setup] Creating virtual environment at .venv with Python ${PY_VERSION}..."
+	uv venv --clear --python "${PY_VERSION}" .venv
+else
+	echo "[setup] Reusing existing virtual environment (.venv) with Python ${CURRENT_PY_VERSION}."
+fi
 
 echo "[setup] Installing dependencies..."
 uv pip install --python .venv/bin/python -r requirements.txt
