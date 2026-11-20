@@ -90,6 +90,7 @@ For example, if an On/Off Light is configured with "20:0, 50:30, 100:0," it will
 - Brightness can both increase and decrease. For example, `60:100` + `100:20` will make a light be at 100% brightness when the room is at 60%, and then decrease its brightness until 20% when the room is at 100%.
 - A light can be turned off at any point by setting it to zero. For example, `30:100` + `60:0` will make it go to 100% when the room is at 30% and gradually turn off until the room reaches 60% (and then back to 100% at 100% because of the following point).
 - Lights will automatically have a `100:100` configuration, so if you need to change the default behavior at 100%, you can adjust it accordingly.
+- If a light is unavailable (for example, it dropped off the network) when the Lightener is turned on or off, the call is remembered and delivered as soon as the light is available again, so it does not come back in a stale state.
 
 Have fun!
 

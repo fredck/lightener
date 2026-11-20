@@ -25,12 +25,14 @@ from homeassistant.const import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_ON,
+    STATE_UNAVAILABLE,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.util.color import value_to_brightness
 
@@ -136,10 +138,122 @@ class LightenerLight(LightGroup):
 
         self._entities = entities
 
+        # Service calls that could not be delivered because the controlled light was
+        # unavailable at the time, keyed by entity_id. Replayed once the light is back.
+        self._pending_calls: dict[str, tuple[str, dict[str, Any]]] = {}
+
         _LOGGER.debug(
             "Created lightener `%s`",
             config_data[CONF_FRIENDLY_NAME],
         )
+
+    async def async_added_to_hass(self) -> None:
+        """Register listeners."""
+        await super().async_added_to_hass()
+
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass, self._entity_ids, self._async_controlled_light_changed
+            )
+        )
+
+    @callback
+    def _async_controlled_light_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Replay a missed service call once a controlled light is available again."""
+        entity_id = event.data["entity_id"]
+        old_state = event.data["old_state"]
+        new_state = event.data["new_state"]
+
+        if new_state is None or new_state.state == STATE_UNAVAILABLE:
+            return
+
+        if old_state is not None and old_state.state != STATE_UNAVAILABLE:
+            # Not a transition back from unavailable, nothing to replay.
+            return
+
+        pending = self._pending_calls.pop(entity_id, None)
+        if pending is None:
+            return
+
+        entity = next(
+            (entity for entity in self._entities if entity.entity_id == entity_id),
+            None,
+        )
+        if entity is None:
+            return
+
+        service, entity_data = pending
+
+        _LOGGER.info(
+            "`%s` is available again, replaying `%s` missed while it was unavailable",
+            entity_id,
+            service,
+        )
+
+        self.hass.async_create_task(
+            self._async_call_light_service(entity, service, entity_data),
+            name="Lightener [replay missed call]",
+        )
+
+    @callback
+    def _async_defer_if_unavailable(
+        self, entity: LightenerControlledLight, service: str, entity_data: dict
+    ) -> bool:
+        """Store the call for later if the controlled light is unavailable right now.
+
+        Home Assistant silently skips unavailable targets, so the light would otherwise
+        keep whatever state it had when it reconnects.
+        """
+        state = self.hass.states.get(entity.entity_id)
+
+        if state is not None and state.state != STATE_UNAVAILABLE:
+            # Any older pending call is superseded by this one.
+            self._pending_calls.pop(entity.entity_id, None)
+            return False
+
+        self._pending_calls[entity.entity_id] = (service, entity_data)
+
+        _LOGGER.info(
+            "`%s` is unavailable, `%s` will be replayed when it is available again",
+            entity.entity_id,
+            service,
+        )
+
+        return True
+
+    async def _async_call_light_service(
+        self, entity: LightenerControlledLight, service: str, entity_data: dict
+    ) -> None:
+        """Call a light service for a controlled light, logging and guarding failures."""
+        try:
+            await self.hass.services.async_call(
+                LIGHT_DOMAIN,
+                service,
+                entity_data,
+                blocking=True,
+                context=self._context,
+            )
+            _LOGGER.debug(
+                "Service `%s` called for `%s` (%s) with `%s`",
+                service,
+                entity.entity_id,
+                entity.type,
+                entity_data,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.exception(
+                "Service `%s` for `%s` (%s) failed: %s; payload=%s",
+                service,
+                entity.entity_id,
+                entity.type,
+                exc,
+                entity_data,
+            )
+            # The light may have dropped off the network mid-call. Keep the call so it
+            # is replayed when the light comes back.
+            self._pending_calls[entity.entity_id] = (service, entity_data)
 
     @property
     def color_mode(self) -> str:
@@ -216,35 +330,6 @@ class LightenerLight(LightGroup):
 
         self._is_frozen = True
 
-        async def _safe_service_call(
-            entity: LightenerControlledLight, service: str, entity_data: dict
-        ) -> None:
-            """Call a service for an entity, logging success and guarding failures."""
-            try:
-                await self.hass.services.async_call(
-                    LIGHT_DOMAIN,
-                    service,
-                    entity_data,
-                    blocking=True,
-                    context=self._context,
-                )
-                _LOGGER.debug(
-                    "Service `%s` called for `%s` (%s) with `%s`",
-                    service,
-                    entity.entity_id,
-                    entity.type,
-                    entity_data,
-                )
-            except Exception as exc:  # noqa: BLE001
-                _LOGGER.exception(
-                    "Service `%s` for `%s` (%s) failed: %s; payload=%s",
-                    service,
-                    entity.entity_id,
-                    entity.type,
-                    exc,
-                    entity_data,
-                )
-
         async with asyncio.TaskGroup() as group:
             for entity in self._entities:
                 service = SERVICE_TURN_ON
@@ -273,8 +358,14 @@ class LightenerLight(LightGroup):
                 # Set the proper entity ID.
                 entity_data[ATTR_ENTITY_ID] = entity.entity_id
 
+                # An unavailable light cannot take the call now, replay it when it is back.
+                if self._async_defer_if_unavailable(entity, service, entity_data):
+                    continue
+
                 # Submit the service call concurrently, guarded to avoid cancelling siblings on failure.
-                group.create_task(_safe_service_call(entity, service, entity_data))
+                group.create_task(
+                    self._async_call_light_service(entity, service, entity_data)
+                )
 
         self._is_frozen = False
 
@@ -295,7 +386,26 @@ class LightenerLight(LightGroup):
 
         self._prefered_brightness = self._attr_brightness
 
-        await super().async_turn_off(**kwargs)
+        # "Transition" is the only additional data allowed with the turn_off service.
+        data = {}
+        if ATTR_TRANSITION in kwargs:
+            data[ATTR_TRANSITION] = kwargs[ATTR_TRANSITION]
+
+        async with asyncio.TaskGroup() as group:
+            for entity in self._entities:
+                entity_data = {**data, ATTR_ENTITY_ID: entity.entity_id}
+
+                # An unavailable light cannot take the call now, replay it when it is back.
+                if self._async_defer_if_unavailable(
+                    entity, SERVICE_TURN_OFF, entity_data
+                ):
+                    continue
+
+                group.create_task(
+                    self._async_call_light_service(
+                        entity, SERVICE_TURN_OFF, entity_data
+                    )
+                )
 
         _LOGGER.debug("[Turn Off] Turned off `%s`", self.entity_id)
 

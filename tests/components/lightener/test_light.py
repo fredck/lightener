@@ -4,9 +4,16 @@ from unittest.mock import ANY, Mock, patch
 from uuid import uuid4
 
 import pytest
-from homeassistant.components.light import ATTR_TRANSITION, ColorMode
+from homeassistant.components.light import ATTR_BRIGHTNESS, ATTR_TRANSITION, ColorMode
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    SERVICE_TURN_OFF,
+    SERVICE_TURN_ON,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import HomeAssistant, ServiceRegistry
 
 from custom_components.lightener.const import TYPE_DIMMABLE, TYPE_ONOFF
@@ -68,6 +75,184 @@ async def test_turn_on_resilient_to_single_failure(
 
     # light.test2 should have ended up on despite light.test1 failing
     assert hass.states.get("light.test2").state == "on"
+
+
+
+def _track_service_calls(calls: list[tuple], fail_once_for: str | None = None):
+    """Build a ServiceRegistry.async_call replacement that records and delegates calls."""
+
+    orig_async_call = ServiceRegistry.async_call
+    failed = set()
+
+    async def fake_async_call(self, domain, service, data, blocking=True, context=None):
+        calls.append((service, data.get(ATTR_ENTITY_ID), data))
+        if data.get(ATTR_ENTITY_ID) == fail_once_for and fail_once_for not in failed:
+            failed.add(fail_once_for)
+            raise RuntimeError("boom")
+        return await orig_async_call(
+            self, domain, service, data, blocking=blocking, context=context
+        )
+
+    return fake_async_call
+
+
+async def _create_two_light_lightener(create_lightener) -> LightenerLight:
+    return await create_lightener(
+        config={
+            "friendly_name": "Test",
+            "entities": {
+                "light.test1": {},
+                "light.test2": {},
+            },
+        }
+    )
+
+
+async def test_turn_off_replayed_when_light_is_available_again(
+    hass: HomeAssistant, create_lightener
+):
+    """A turn_off missed by an unavailable light is delivered once it is back."""
+
+    lightener = await _create_two_light_lightener(create_lightener)
+
+    await lightener.async_turn_on(brightness=255)
+    await hass.async_block_till_done()
+    assert hass.states.get("light.test1").state == STATE_ON
+    assert hass.states.get("light.test2").state == STATE_ON
+
+    # light.test2 drops off the network while on.
+    hass.states.async_set("light.test2", STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+
+    calls: list[tuple] = []
+
+    with patch.object(
+        ServiceRegistry, "async_call", side_effect=_track_service_calls(calls), autospec=True
+    ):
+        await lightener.async_turn_off()
+        await hass.async_block_till_done()
+
+        # Only the available light was called, the unavailable one is held for later.
+        assert [(c[0], c[1]) for c in calls] == [(SERVICE_TURN_OFF, "light.test1")]
+        assert hass.states.get("light.test1").state == STATE_OFF
+        assert hass.states.get("light.test").state == STATE_OFF
+
+        # light.test2 reconnects, still reporting the state it had before dropping.
+        hass.states.async_set("light.test2", STATE_ON, {ATTR_BRIGHTNESS: 255})
+        await hass.async_block_till_done()
+        # The group re-evaluates its state on the loop pass after the replayed call.
+        await hass.async_block_till_done()
+
+        assert (calls[-1][0], calls[-1][1]) == (SERVICE_TURN_OFF, "light.test2")
+        assert hass.states.get("light.test2").state == STATE_OFF
+        assert hass.states.get("light.test").state == STATE_OFF
+
+
+async def test_turn_on_replayed_when_light_is_available_again(
+    hass: HomeAssistant, create_lightener
+):
+    """A turn_on missed by an unavailable light is delivered with its brightness."""
+
+    lightener = await _create_two_light_lightener(create_lightener)
+
+    hass.states.async_set("light.test2", STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+
+    calls: list[tuple] = []
+
+    with patch.object(
+        ServiceRegistry, "async_call", side_effect=_track_service_calls(calls), autospec=True
+    ):
+        await lightener.async_turn_on(brightness=255)
+        await hass.async_block_till_done()
+
+        assert [(c[0], c[1]) for c in calls] == [(SERVICE_TURN_ON, "light.test1")]
+        assert hass.states.get("light.test1").state == STATE_ON
+
+        hass.states.async_set("light.test2", STATE_OFF)
+        await hass.async_block_till_done()
+
+        assert (calls[-1][0], calls[-1][1]) == (SERVICE_TURN_ON, "light.test2")
+        assert calls[-1][2][ATTR_BRIGHTNESS] == 255
+        assert hass.states.get("light.test2").state == STATE_ON
+        assert hass.states.get("light.test2").attributes[ATTR_BRIGHTNESS] == 255
+
+
+async def test_no_replay_without_missed_call(hass: HomeAssistant, create_lightener):
+    """A light coming back from unavailable is left alone if nothing was missed."""
+
+    await _create_two_light_lightener(create_lightener)
+
+    hass.states.async_set("light.test2", STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+
+    calls: list[tuple] = []
+
+    with patch.object(
+        ServiceRegistry, "async_call", side_effect=_track_service_calls(calls), autospec=True
+    ):
+        hass.states.async_set("light.test2", STATE_ON)
+        await hass.async_block_till_done()
+
+    assert calls == []
+
+
+async def test_latest_missed_call_wins(hass: HomeAssistant, create_lightener):
+    """Only the most recent missed call is replayed."""
+
+    lightener = await _create_two_light_lightener(create_lightener)
+
+    hass.states.async_set("light.test2", STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+
+    calls: list[tuple] = []
+
+    with patch.object(
+        ServiceRegistry, "async_call", side_effect=_track_service_calls(calls), autospec=True
+    ):
+        await lightener.async_turn_off()
+        await lightener.async_turn_on(brightness=128)
+        await hass.async_block_till_done()
+
+        assert all(c[1] == "light.test1" for c in calls)
+        calls.clear()
+
+        hass.states.async_set("light.test2", STATE_OFF)
+        await hass.async_block_till_done()
+
+        assert [(c[0], c[1]) for c in calls] == [(SERVICE_TURN_ON, "light.test2")]
+        assert hass.states.get("light.test2").state == STATE_ON
+
+
+async def test_failed_call_replayed_when_light_is_available_again(
+    hass: HomeAssistant, create_lightener
+):
+    """A call that failed mid-flight is replayed once the light reconnects."""
+
+    lightener = await _create_two_light_lightener(create_lightener)
+
+    calls: list[tuple] = []
+
+    with patch.object(
+        ServiceRegistry,
+        "async_call",
+        side_effect=_track_service_calls(calls, fail_once_for="light.test1"),
+        autospec=True,
+    ):
+        await lightener.async_turn_on(brightness=255)
+        await hass.async_block_till_done()
+
+        assert hass.states.get("light.test1").state == STATE_OFF
+        assert hass.states.get("light.test2").state == STATE_ON
+
+        # The light drops and comes back, the failed turn_on is retried.
+        hass.states.async_set("light.test1", STATE_UNAVAILABLE)
+        await hass.async_block_till_done()
+        hass.states.async_set("light.test1", STATE_OFF)
+        await hass.async_block_till_done()
+
+        assert (calls[-1][0], calls[-1][1]) == (SERVICE_TURN_ON, "light.test1")
+        assert hass.states.get("light.test1").state == STATE_ON
 
 
 ###########################################################
